@@ -8,6 +8,7 @@
 
 import os
 import sys
+sys.path.append('./rknn')
 import urllib
 import urllib.request
 import time
@@ -21,6 +22,7 @@ from shapely.geometry import Polygon
 
 # 导入ByteTrack跟踪器
 from ByteTracker import ByteTracker
+
 
 # -------- 平台适配导入 --------
 USING_PC = sys.platform.startswith("win") or platform.system().lower().startswith("windows")
@@ -55,7 +57,7 @@ class RKNN_YOLO:
             nms_threshold (float, optional): NMS阈值. 默认为 0.45
             tracking (bool, optional): 是否启用跟踪. 默认为 False
         """
-        self.CLASSES = ['seasoning']
+        self.CLASSES = ['box']
         self.meshgrid = []
         self.class_num = len(self.CLASSES)
         self.head_num = 3
@@ -529,14 +531,21 @@ class RKNN_YOLO:
         在图像上绘制检测和跟踪结果
         
         Args:
-            image (numpy.ndarray): 输入图像，BGR格式
+            image (numpy.ndarray): 输入图像，BGR格式或灰度格式
             detection_results: 检测结果列表或跟踪结果列表
             draw_track_id (bool): 是否绘制跟踪ID
             
         Returns:
             numpy.ndarray: 绘制了检测和跟踪结果的图像
         """
-        result_image = image.copy()
+        # 检查图像是否为灰度图像，如果是则转换为BGR格式
+        if len(image.shape) == 2 or (len(image.shape) == 3 and image.shape[2] == 1):
+            # 灰度图像转换为BGR格式
+            result_image = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+        else:
+            # 已经是BGR格式，直接复制
+            result_image = image.copy()
+            
         # 统一使用红色
         color = (0, 0, 255)  # BGR格式的红色
         
@@ -578,68 +587,12 @@ class RKNN_YOLO:
             
         return result_image
         
-    def draw_result_win(self, image, detection_results, draw_track_id=True):
-        """
-        Windows 平台绘制检测/跟踪结果（不绘制旋转框，改用水平矩形），以提高兼容性和速度。
-
-        Args:
-            image (numpy.ndarray): BGR 格式输入图像。
-            detection_results (list): 检测或跟踪结果。
-            draw_track_id (bool): 是否在标签中追加 Track ID。
-
-        Returns:
-            numpy.ndarray: 已绘制结果的图像。
-        """
-        # 复制原图，避免修改原始数据
-        result_image = image.copy()
-        # 统一使用红色
-        color = (0, 0, 255)  # BGR格式的红色
-
-        for result in detection_results:
-            # 判断是检测结果还是跟踪结果
-            if isinstance(result, dict) and 'detect_box' in result:
-                box = result['detect_box']
-                track_id = result.get('track_id', -1)
-            else:
-                # 兼容 Ultralytics OBB 输出 (N,4,2) 或 (8,)坐标
-                box_data = result  # 可能是 numpy / torch 张量 / list
-                import numpy as _np
-                try:
-                    # 转成 numpy
-                    coords = _np.array(box_data.cpu() if hasattr(box_data, 'cpu') else box_data)
-                except Exception:
-                    coords = _np.array(box_data)
-
-                # 确保形状为 (4,2)
-                if coords.size == 8:
-                    coords = coords.reshape(4, 2)
-                if coords.shape != (4, 2):
-                    # 形状异常，跳过
-                    continue
-
-                # 取整坐标
-                pts_int = coords.astype(int)
-                # 绘制多边形（旋转框）
-                cv2.polylines(result_image, [pts_int.reshape((-1, 1, 2))], True, color, 2)
-
-                # 使用外接矩形左上角作为文本起点
-                x_min = int(coords[:, 0].min())
-                y_min = int(coords[:, 1].min())
-
-                label = f"Obj"
-                text_origin = (x_min, y_min - 5 if y_min - 5 > 0 else y_min + 20)
-                # 绘制文字（红色）
-                cv2.putText(result_image, label, text_origin, cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
-                continue  # 继续下一个 result
-
-        return result_image
-        
     def draw_best_result(self, image, detection_results, best_target_index=-1, draw_track_id=True):
         """
         AARCH平台绘制检测结果并突出最优目标
         
         Args:
-            image (numpy.ndarray): 输入图像，BGR格式
+            image (numpy.ndarray): 输入图像，BGR格式或灰度格式
             detection_results: DetectBox对象列表
             best_target_index (int): 最优目标的索引，-1表示没有最优目标
             draw_track_id (bool): 是否绘制跟踪ID
@@ -647,7 +600,13 @@ class RKNN_YOLO:
         Returns:
             numpy.ndarray: 绘制了检测结果的图像
         """
-        result_image = image.copy()
+        # 检查图像是否为灰度图像，如果是则转换为BGR格式
+        if len(image.shape) == 2 or (len(image.shape) == 3 and image.shape[2] == 1):
+            # 灰度图像转换为BGR格式
+            result_image = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+        else:
+            # 已经是BGR格式，直接复制
+            result_image = image.copy()
         
         for i, result in enumerate(detection_results):
             # 确定是跟踪结果还是检测结果
@@ -706,7 +665,7 @@ class RKNN_YOLO:
         Windows平台绘制检测结果并突出最优目标
         
         Args:
-            image (numpy.ndarray): BGR格式输入图像
+            image (numpy.ndarray): BGR格式或灰度格式输入图像
             detection_results (list): UltralyticsYOLO检测结果，格式为(N,4,2)坐标点
             best_target_index (int): 最优目标的索引，-1表示没有最优目标
             draw_track_id (bool): 是否在标签中追加Track ID
@@ -714,8 +673,13 @@ class RKNN_YOLO:
         Returns:
             numpy.ndarray: 已绘制结果的图像
         """
-        # 复制原图，避免修改原始数据
-        result_image = image.copy()
+        # 检查图像是否为灰度图像，如果是则转换为BGR格式
+        if len(image.shape) == 2 or (len(image.shape) == 3 and image.shape[2] == 1):
+            # 灰度图像转换为BGR格式
+            result_image = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+        else:
+            # 已经是BGR格式，直接复制
+            result_image = image.copy()
 
         for i, result in enumerate(detection_results):
             # 确定颜色：最优目标用绿色，其他用红色

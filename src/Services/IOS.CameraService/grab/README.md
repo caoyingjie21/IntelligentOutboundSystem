@@ -23,6 +23,7 @@
 - 回调函数模式连续流
 - 后台线程模式连续流
 - 性能测试模式
+- **自动保存功能** - 支持按帧间隔自动保存图像和深度数据
 
 ## 使用方法
 
@@ -67,6 +68,11 @@ python quick_grab.py --help
 
 ### 使用连续流演示程序 🆕
 
+#### 基本使用（默认每10帧保存一次）
+```bash
+python continuous_stream_demo.py
+```
+
 #### 生成器模式（默认）
 ```bash
 python continuous_stream_demo.py --mode generator
@@ -87,12 +93,47 @@ python continuous_stream_demo.py --mode thread
 python continuous_stream_demo.py --mode performance
 ```
 
-#### 指定参数
+#### 自定义保存间隔
 ```bash
-python continuous_stream_demo.py --ip 192.168.10.100 --dir ./stream_data --mode callback
+# 每5帧保存一次
+python continuous_stream_demo.py --save-interval 5
+
+# 每20帧保存一次，使用回调模式
+python continuous_stream_demo.py --mode callback --save-interval 20
 ```
 
+#### 指定所有参数
+```bash
+python continuous_stream_demo.py --ip 192.168.10.100 --dir ./stream_data --mode callback --save-interval 15
+```
+
+#### 查看所有参数选项
+```bash
+python continuous_stream_demo.py --help
+```
+
+**连续流程序控制说明：**
+- 按 `q` 键退出程序
+- 按 `p` 键暂停/恢复自动保存
+- 程序默认开启自动保存功能
+- 界面会实时显示保存状态和间隔设置
+
 ## 连续流功能详解 🆕
+
+### 自动保存功能 🆕
+
+连续流演示程序支持智能的自动保存功能：
+
+**特性：**
+- **按帧间隔保存**：根据设定的间隔自动保存图像和深度数据
+- **实时控制**：运行时可以暂停/恢复自动保存
+- **状态显示**：界面实时显示保存状态和间隔信息
+- **文件管理**：自动创建目录和生成时间戳文件名
+
+**参数说明：**
+- `--save-interval N`：每N帧保存一次（默认10帧）
+- 程序启动时会显示："自动保存已启用，每隔 N 帧保存一次"
+- 保存的文件会显示："自动保存帧 X: filename.png"
 
 ### QtVisionSick 类新增方法
 
@@ -178,6 +219,25 @@ camera.stop_continuous_stream_thread()
 | **回调函数模式** | 灵活的处理逻辑 | 阻塞主线程 | 复杂的图像处理逻辑 |
 | **后台线程模式** | 不阻塞主线程，支持并发 | 复杂度较高 | 实时显示+用户交互 |
 
+## 命令行参数说明 🆕
+
+### continuous_stream_demo.py 参数
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `--ip` | string | 192.168.10.5 | 相机IP地址 |
+| `--dir` | string | ./data | 保存目录路径 |
+| `--mode` | choice | generator | 演示模式：generator, callback, thread, performance |
+| `--save-interval` | int | 10 | 自动保存间隔帧数 |
+
+### quick_grab.py 参数
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `--ip` | string | 192.168.10.5 | 相机IP地址 |
+| `--dir` | string | ./data | 保存目录路径 |
+| `--count` | int | 1 | 采集图像数量 |
+
 ## 输出文件结构
 
 程序会在指定的保存目录中创建以下结构：
@@ -245,6 +305,7 @@ depth_data = np.load('depth_file.npy')
 - 数据流端口：`2114`
 - 保存目录：`./data`
 - 连续流帧率：约30fps（0.033秒间隔）
+- **自动保存间隔：10帧** 🆕
 
 ### 修改配置
 在程序中修改以下变量：
@@ -280,6 +341,12 @@ SAVE_PATH = "./data"        # 保存路径
 - 避免在回调函数中进行耗时操作
 - 考虑使用后台线程模式来避免阻塞主线程
 
+### 6. 自动保存问题 🆕
+- 检查磁盘空间是否足够（深度数据文件较大）
+- 如果保存过于频繁，可以增大`--save-interval`参数值
+- 保存目录权限不足时会报错，确保有写入权限
+- 可以通过按'p'键临时暂停自动保存来调试其他问题
+
 ## 依赖要求
 
 ```
@@ -304,4 +371,9 @@ pip install opencv-python numpy
    - 长时间运行时建议监控系统资源使用情况
    - 在图像处理回调函数中避免阻塞操作
    - 合理设置最大帧数和超时时间来控制采集时长
-   - 退出程序前确保正确停止连续流线程 
+   - 退出程序前确保正确停止连续流线程
+7. **自动保存注意事项** 🆕：
+   - 自动保存功能默认开启，会持续写入磁盘
+   - 保存间隔设置过小会产生大量文件，注意磁盘空间管理
+   - 建议根据实际需求调整保存间隔（例如：测试时用较大间隔，正式采集时用较小间隔）
+   - 可以在运行时通过'p'键灵活控制是否保存 
