@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "IOS.MotionControl": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "applicationUrl": "https://localhost:63111;http://localhost:63113"
+    }
+  }
+}
