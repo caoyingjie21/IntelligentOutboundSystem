@@ -317,7 +317,7 @@ class RKNN_YOLO:
         # Windows / PC: 使用 UltralyticsYOLO
         if self.pc_yolo is not None:
             image_h, image_w = image.shape[:2]
-            img_resized = cv2.resize(image, (256, 256), interpolation=cv2.INTER_LINEAR)
+            img_resized = cv2.resize(image, (self.input_width, self.input_height), interpolation=cv2.INTER_LINEAR)
             img_bgr = cv2.cvtColor(img_resized, cv2.COLOR_GRAY2BGR)
             
             # UltralyticsYOLO 期待 BGR 或路径输入，直接传递 ndarray
@@ -355,8 +355,8 @@ class RKNN_YOLO:
                     continue
                 
                 # 将坐标缩放回原始图像尺寸
-                scale_x = image_w / 256.0
-                scale_y = image_h / 256.0
+                scale_x = image_w / self.input_width
+                scale_y = image_h / self.input_height
                 
                 pt1x = int(pt1x * scale_x)
                 pt1y = int(pt1y * scale_y)
@@ -659,87 +659,7 @@ class RKNN_YOLO:
                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
             
         return result_image
-        
-    def draw_best_result_win(self, image, detection_results, best_target_index=-1, draw_track_id=True):
-        """
-        Windows平台绘制检测结果并突出最优目标
-        
-        Args:
-            image (numpy.ndarray): BGR格式或灰度格式输入图像
-            detection_results (list): UltralyticsYOLO检测结果，格式为(N,4,2)坐标点
-            best_target_index (int): 最优目标的索引，-1表示没有最优目标
-            draw_track_id (bool): 是否在标签中追加Track ID
-            
-        Returns:
-            numpy.ndarray: 已绘制结果的图像
-        """
-        # 检查图像是否为灰度图像，如果是则转换为BGR格式
-        if len(image.shape) == 2 or (len(image.shape) == 3 and image.shape[2] == 1):
-            # 灰度图像转换为BGR格式
-            result_image = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
-        else:
-            # 已经是BGR格式，直接复制
-            result_image = image.copy()
-
-        for i, result in enumerate(detection_results):
-            # 确定颜色：最优目标用绿色，其他用红色
-            color = (0, 255, 0) if i == best_target_index else (0, 0, 255)  # BGR格式
-            line_thickness = 3 if i == best_target_index else 2  # 最优目标用更粗的线
-            
-            # 判断是检测结果还是跟踪结果
-            if isinstance(result, dict) and 'detect_box' in result:
-                box_data = result['detect_box']
-                track_id = result.get('track_id', -1)
-            else:
-                # 兼容 Ultralytics OBB 输出 (N,4,2) 或 (8,)坐标
-                box_data = result  # 可能是 numpy / torch 张量 / list
-                track_id = -1
-                
-            import numpy as _np
-            try:
-                # 转成 numpy
-                coords = _np.array(box_data.cpu() if hasattr(box_data, 'cpu') else box_data)
-            except Exception:
-                coords = _np.array(box_data)
-
-            # 确保形状为 (4,2)
-            if coords.size == 8:
-                coords = coords.reshape(4, 2)
-            if coords.shape != (4, 2):
-                # 形状异常，跳过
-                continue
-
-            # 取整坐标
-            pts_int = coords.astype(int)
-            # 绘制多边形（旋转框）
-            cv2.polylines(result_image, [pts_int.reshape((-1, 1, 2))], True, color, line_thickness)
-
-            # 使用外接矩形左上角作为文本起点
-            x_min = int(coords[:, 0].min())
-            y_min = int(coords[:, 1].min())
-
-            label = f"Object {i+1}"
-            
-            # 如果有跟踪ID，添加到标签中
-            if track_id != -1 and draw_track_id:
-                label += f" ID:{track_id}"
-            
-            # 如果是最优目标，添加标识
-            if i == best_target_index:
-                label = f"Best Target - {label}"
-                
-            text_origin = (x_min, y_min - 5 if y_min - 5 > 0 else y_min + 20)
-            
-            # 绘制标签背景（最优目标用绿色背景，其他用红色背景）
-            label_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)[0]
-            cv2.rectangle(result_image, (text_origin[0], text_origin[1] - label_size[1] - 5), 
-                         (text_origin[0] + label_size[0], text_origin[1]), color, -1)
-            
-            # 绘制标签文字（白色）
-            cv2.putText(result_image, label, text_origin, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-            
-        return result_image
-        
+    
     def release(self):
         """
         释放RKNN资源

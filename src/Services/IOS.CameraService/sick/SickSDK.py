@@ -70,7 +70,7 @@ class QtVisionSick:
             return False
     
     @retry(max_retries=3, delay=1.0, logger_name=__name__)
-    def connect(self, use_single_step=True):
+    def connect(self, use_single_step=False):
         """
         连接相机并初始化流
         
