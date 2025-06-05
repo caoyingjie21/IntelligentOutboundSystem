@@ -67,7 +67,7 @@ class IOSCameraService:
     
     def _calculate_3d_coordinates_and_volume(self, detection_box, depth_data, camera_params):
         """
-        计算检测框的3D坐标和体积
+        计算检测框的3D坐标
         
         Args:
             detection_box: 检测框对象
@@ -75,7 +75,7 @@ class IOSCameraService:
             camera_params: 相机参数
             
         Returns:
-            dict: 包含3D坐标和体积信息的字典
+            dict: 包含3D坐标信息的字典
         """
         try:
             # 获取检测框的四个角点
@@ -126,120 +126,12 @@ class IOSCameraService:
                 center_3d = (0, 0, 0)
                 self.logger.warning(f"中心点 3D坐标: 计算失败")
             
-            # 计算矩形的长宽高和体积
-            volume = 0.0
-            length = width = height = 0.0
-            
-            if len(corner_3d_coords) >= 4 and all(coord != (0, 0, 0) for coord in corner_3d_coords):
-                # 将坐标转换为numpy数组以便计算
-                coords_array = np.array(corner_3d_coords)
-                
-                self.logger.info("=== 矩形尺寸计算（平面投影法） ===")
-                
-                # 计算在XY平面上的投影长度（忽略Z坐标差异）
-                # 根据角点的生成顺序（顺时针）：
-                # pt1: 左上角, pt2: 右上角, pt3: 右下角, pt4: 左下角
-                
-                # 计算四条边在XY平面的投影长度
-                edge_info = [
-                    ("上边(pt1→pt2)", 0, 1),
-                    ("右边(pt2→pt3)", 1, 2),
-                    ("下边(pt3→pt4)", 2, 3),
-                    ("左边(pt4→pt1)", 3, 0)
-                ]
-                
-                edge_lengths_xy = []
-                for edge_name, idx1, idx2 in edge_info:
-                    pt1 = coords_array[idx1]
-                    pt2 = coords_array[idx2]
-                    
-                    # 只计算XY平面的距离，忽略Z坐标
-                    edge_length_xy = np.sqrt((pt2[0] - pt1[0])**2 + (pt2[1] - pt1[1])**2)
-                    edge_lengths_xy.append(edge_length_xy)
-                    
-                    self.logger.info(f"{edge_name} (XY投影): {edge_length_xy:.2f} mm")
-                    self.logger.info(f"  从 ({pt1[0]:.2f}, {pt1[1]:.2f}) 到 ({pt2[0]:.2f}, {pt2[1]:.2f})")
-                
-                # 对于矩形，相对的边应该长度相近
-                # 上边和下边为一对，左边和右边为一对
-                top_bottom_avg = (edge_lengths_xy[0] + edge_lengths_xy[2]) / 2     # 上边+下边平均
-                left_right_avg = (edge_lengths_xy[1] + edge_lengths_xy[3]) / 2     # 右边+左边平均
-                
-                self.logger.info(f"上下边平均长度: {top_bottom_avg:.2f} mm (上边: {edge_lengths_xy[0]:.2f}, 下边: {edge_lengths_xy[2]:.2f})")
-                self.logger.info(f"左右边平均长度: {left_right_avg:.2f} mm (右边: {edge_lengths_xy[1]:.2f}, 左边: {edge_lengths_xy[3]:.2f})")
-                
-                # 检查哪个方向是长度，哪个是宽度
-                if top_bottom_avg >= left_right_avg:
-                    length = top_bottom_avg    # 上下边作为长度
-                    width = left_right_avg     # 左右边作为宽度
-                    self.logger.info("判断: 上下方向为长度方向，左右方向为宽度方向")
-                else:
-                    length = left_right_avg    # 左右边作为长度  
-                    width = top_bottom_avg     # 上下边作为宽度
-                    self.logger.info("判断: 左右方向为长度方向，上下方向为宽度方向")
-                
-                # 计算高度：使用所有Z坐标的范围
-                z_coords = coords_array[:, 2]  # 提取所有Z坐标
-                height = abs(np.max(z_coords) - np.min(z_coords))
-                
-                # 如果高度太小（可能是平面物体），使用默认最小高度
-                if height < 1.0:  # 小于1mm认为是平面
-                    height = 5.0  # 设置默认高度5mm
-                    self.logger.info(f"检测到平面物体，使用默认高度: {height:.2f} mm")
-                
-                # 计算矩形面积和体积
-                area = length * width
-                volume = area * height
-                
-                # 诊断信息
-                self.logger.info("=== 详细诊断信息 ===")
-                
-                # 检查矩形的对称性
-                top_bottom_diff = abs(edge_lengths_xy[0] - edge_lengths_xy[2])
-                left_right_diff = abs(edge_lengths_xy[1] - edge_lengths_xy[3])
-                self.logger.info(f"上下边差异: {top_bottom_diff:.2f} mm ({(top_bottom_diff/top_bottom_avg)*100:.1f}%)")
-                self.logger.info(f"左右边差异: {left_right_diff:.2f} mm ({(left_right_diff/left_right_avg)*100:.1f}%)")
-                
-                # 如果差异过大，给出警告
-                if top_bottom_diff > top_bottom_avg * 0.1:  # 超过10%差异
-                    self.logger.warning(f"警告: 上下边长度差异较大 ({top_bottom_diff:.2f} mm)，可能检测框不准确")
-                if left_right_diff > left_right_avg * 0.1:  # 超过10%差异
-                    self.logger.warning(f"警告: 左右边长度差异较大 ({left_right_diff:.2f} mm)，可能检测框不准确")
-                
-                # Z坐标分析
-                z_mean = np.mean(z_coords)
-                z_std = np.std(z_coords)
-                self.logger.info(f"Z坐标统计: 最小={np.min(z_coords):.2f}, 最大={np.max(z_coords):.2f}, 平均={z_mean:.2f}, 标准差={z_std:.2f} mm")
-                
-                self.logger.info("=== 最终计算结果 ===")
-                self.logger.info(f"矩形长度: {length:.2f} mm")
-                self.logger.info(f"矩形宽度: {width:.2f} mm") 
-                self.logger.info(f"矩形面积: {area:.2f} mm²")
-                self.logger.info(f"物体高度: {height:.2f} mm")
-                self.logger.info(f"计算体积: {volume:.2f} mm³")
-                
-                # 计算矩形倾斜角度（在XY平面上）
-                # 使用上边（pt1→pt2）计算角度
-                edge1_2d = np.array([coords_array[1][0] - coords_array[0][0], coords_array[1][1] - coords_array[0][1]])
-                angle_rad = np.arctan2(edge1_2d[1], edge1_2d[0])
-                angle_deg = np.degrees(angle_rad)
-                self.logger.info(f"矩形倾斜角度: {angle_deg:.1f}°")
-                
-            else:
-                self.logger.warning("无法计算有效的尺寸，部分3D坐标计算失败")
-            
+            # 构建返回结果
             result = {
                 "center_2d": {"x": center_x, "y": center_y},
                 "center_3d": {"x": center_3d[0], "y": center_3d[1], "z": center_3d[2]},
                 "corners_2d": [{"x": x, "y": y} for x, y in corners],
                 "corners_3d": [{"x": coord[0], "y": coord[1], "z": coord[2]} for coord in corner_3d_coords],
-                "dimensions": {
-                    "length": length,
-                    "width": width, 
-                    "height": height,
-                    "area": length * width,
-                    "volume": volume
-                },
                 "valid_3d": center_success and len([c for c in corner_3d_coords if c != (0, 0, 0)]) >= 4
             }
             
@@ -247,13 +139,12 @@ class IOSCameraService:
             return result
             
         except Exception as e:
-            self.logger.error(f"计算3D坐标和体积时发生异常: {str(e)}")
+            self.logger.error(f"计算3D坐标时发生异常: {str(e)}")
             return {
                 "center_2d": {"x": 0, "y": 0},
                 "center_3d": {"x": 0, "y": 0, "z": 0},
                 "corners_2d": [],
                 "corners_3d": [],
-                "dimensions": {"length": 0, "width": 0, "height": 0, "area": 0, "volume": 0},
                 "valid_3d": False
             }
     
@@ -284,7 +175,6 @@ class IOSCameraService:
                     
                     # 为每个检测结果计算3D坐标和体积
                     enhanced_results = []
-                    total_volume = 0.0
                     
                     for i, box in enumerate(detection_results):
                         # 计算3D坐标和体积
@@ -305,25 +195,23 @@ class IOSCameraService:
                             },
                             "coordinates_3d": coord_info["center_3d"],
                             "corners_3d": coord_info["corners_3d"],
-                            "dimensions": coord_info["dimensions"],
                             "is_3d_valid": coord_info["valid_3d"]
                         }
                         
                         enhanced_results.append(detection_data)
                         
                         if coord_info["valid_3d"]:
-                            total_volume += coord_info["dimensions"]["volume"]
-                            self.logger.info(f"目标{i+1}: 体积={coord_info['dimensions']['volume']:.2f}mm³")
+                            self.logger.info(f"目标{i+1}: 3D坐标计算成功")
                     
-                    self.logger.info(f"总体积: {total_volume:.2f}mm³")
+                    self.logger.info(f"成功处理 {len(enhanced_results)} 个检测目标")
                     
-                    # 发布增强的检测结果到MQTT
-                    self._publish_enhanced_detection_results(enhanced_results, total_volume)
+                    # 发布增强的检测结果
+                    self._publish_enhanced_detection_results(enhanced_results)
                 else:
                     self.logger.info("未检测到目标")
                     
                     # 发布空检测结果
-                    self._publish_enhanced_detection_results([], 0.0)
+                    self._publish_enhanced_detection_results([])
                 
                 # 保存结果图像
                 cv2.imwrite("result.jpg", result_image)
@@ -339,7 +227,7 @@ class IOSCameraService:
             self.logger.error(f"执行单次检测时发生异常: {str(e)}")
             return False
     
-    def _publish_enhanced_detection_results(self, enhanced_results, total_volume):
+    def _publish_enhanced_detection_results(self, enhanced_results):
         """发布增强的检测结果到MQTT"""
         if not self.mqtt_client or not self.mqtt_client.is_alive():
             return
@@ -348,7 +236,6 @@ class IOSCameraService:
             detection_message = {
                 "timestamp": time.time(),
                 "detection_count": len(enhanced_results),
-                "total_volume_mm3": total_volume,
                 "results": enhanced_results
             }
             
@@ -643,7 +530,7 @@ class IOSCameraService:
 def frame_callback(success, depth_data, intensity_image, camera_params, rknn_yolo):
     """帧处理回调函数（保留用于其他用途）"""
     if success:
-      # 运行RKNN YOLO模型
+        # 运行RKNN YOLO模型
         detection_results = rknn_yolo.detect(intensity_image)
         # 绘制检测结果
         result_image = rknn_yolo.draw_result(intensity_image, detection_results)
@@ -652,7 +539,7 @@ def frame_callback(success, depth_data, intensity_image, camera_params, rknn_yol
         if detection_results:
             logger.info(f"检测到 {len(detection_results)} 个目标")
         
-      # 显示结果
+        # 显示结果
         cv2.imshow('Intensity Image', result_image)
     else:
         logger.error("获取帧失败")
