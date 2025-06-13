@@ -197,6 +197,32 @@ public class SharedDataService
     public int Count => _data.Count;
 
     /// <summary>
+    /// 获取数据数量（方法形式）
+    /// </summary>
+    /// <returns>数据数量</returns>
+    public int GetDataCount()
+    {
+        return _data.Count;
+    }
+
+    /// <summary>
+    /// 获取所有数据
+    /// </summary>
+    /// <returns>所有数据的字典</returns>
+    public Dictionary<string, object> GetAllData()
+    {
+        try
+        {
+            return _data.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "获取所有数据异常");
+            return new Dictionary<string, object>();
+        }
+    }
+
+    /// <summary>
     /// 原子性更新数据
     /// </summary>
     /// <typeparam name="T">数据类型</typeparam>

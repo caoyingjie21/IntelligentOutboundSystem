@@ -4,7 +4,7 @@
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>90983c1a-fc31-4d1d-b8de-2caada5e683d</ProjectGuid>
     <ProjectHome>.</ProjectHome>
-    <StartupFile>IOS.CameraService.py</StartupFile>
+    <StartupFile>main.py</StartupFile>
     <SearchPath>
     </SearchPath>
     <WorkingDirectory>.</WorkingDirectory>
@@ -21,7 +21,37 @@
     <EnableUnmanagedDebugging>false</EnableUnmanagedDebugging>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="IOS.CameraService.py" />
+    <Compile Include="main.py" />
+    <Compile Include="mqtt\__init__.py" />
+    <Compile Include="mqtt\CameraMqtt.py" />
+    <Compile Include="SDK\SickSDK.py" />
+    <Compile Include="SDK\common\__init__.py" />
+    <Compile Include="SDK\common\Control.py" />
+    <Compile Include="SDK\common\Stream.py" />
+    <Compile Include="SDK\common\UnitConversion.py" />
+    <Compile Include="SDK\sick_visionary_python_samples\visionary_GetStarted.py" />
+    <Compile Include="SDK\sick_visionary_python_samples\visionary_HelloDevice.py" />
+    <Compile Include="SDK\sick_visionary_python_samples\visionary_StreamingDemo.py" />
+    <Compile Include="SDK\sick_visionary_python_samples\visionary_ToPointCloud.py" />
+    <Compile Include="SDK\sick_visionary_python_samples\visionaryT-Mini_DHCP.py" />
+    <Compile Include="SDK\sick_visionary_python_samples\visionaryT-Mini_Statemap.py" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="mqtt\" />
+    <Folder Include="SDK\" />
+    <Folder Include="SDK\common\" />
+    <Folder Include="SDK\common\data_io\" />
+    <Folder Include="SDK\common\PointCloud\" />
+    <Folder Include="SDK\common\Protocol\" />
+    <Folder Include="SDK\common\Streaming\" />
+    <Folder Include="SDK\sick_visionary_python_samples\" />
+    <Folder Include="SDK\sick_visionary_python_samples\common\" />
+    <Folder Include="SDK\sick_visionary_python_samples\sample_data\" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="README.md" />
+    <Content Include="SDK\README.md" />
+    <Content Include="SDK\sick_visionary_python_samples\README.adoc" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />
   <!-- Uncomment the CoreCompile target to enable the Build command in

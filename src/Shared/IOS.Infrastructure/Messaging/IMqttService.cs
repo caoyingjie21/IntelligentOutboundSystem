@@ -119,4 +119,25 @@ public class MqttOptions
     /// 清除会话
     /// </summary>
     public bool CleanSession { get; set; } = true;
+
+    /// <summary>
+    /// 主题配置
+    /// </summary>
+    public MqttTopicOptions Topics { get; set; } = new();
+}
+
+/// <summary>
+/// MQTT主题配置选项
+/// </summary>
+public class MqttTopicOptions
+{
+    /// <summary>
+    /// 订阅主题列表
+    /// </summary>
+    public List<string> Subscribe { get; set; } = new();
+
+    /// <summary>
+    /// 发布主题配置
+    /// </summary>
+    public Dictionary<string, string> Publish { get; set; } = new();
 } 

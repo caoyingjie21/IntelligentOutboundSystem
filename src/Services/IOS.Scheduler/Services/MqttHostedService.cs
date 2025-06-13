@@ -1,6 +1,7 @@
 using IOS.Infrastructure.Messaging;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace IOS.Scheduler.Services;
 
@@ -13,17 +14,20 @@ public class MqttHostedService : BackgroundService
     private readonly ILogger<MqttHostedService> _logger;
     private readonly MessageHandlerFactory _messageHandlerFactory;
     private readonly SharedDataService _sharedDataService;
+    private readonly MqttOptions _mqttOptions;
 
     public MqttHostedService(
         IMqttService mqttService, 
         ILogger<MqttHostedService> logger,
         MessageHandlerFactory messageHandlerFactory,
-        SharedDataService sharedDataService)
+        SharedDataService sharedDataService,
+        IOptions<MqttOptions> mqttOptions)
     {
         _mqttService = mqttService;
         _logger = logger;
         _messageHandlerFactory = messageHandlerFactory;
         _sharedDataService = sharedDataService;
+        _mqttOptions = mqttOptions.Value;
     }
 
     public override async Task StartAsync(CancellationToken cancellationToken)
@@ -32,12 +36,16 @@ public class MqttHostedService : BackgroundService
         
         try
         {
+            // 先调用基类StartAsync启动BackgroundService
+            await base.StartAsync(cancellationToken);
+            
             // 订阅连接状态变更事件
             _mqttService.OnConnectionChanged += OnConnectionChanged;
             
             // 订阅消息接收事件
             _mqttService.OnMessageReceived += OnMessageReceived;
             
+            // 启动MQTT服务
             await _mqttService.StartAsync(cancellationToken);
             _logger.LogInformation("MQTT服务启动成功");
         }
@@ -46,8 +54,6 @@ public class MqttHostedService : BackgroundService
             _logger.LogError(ex, "启动MQTT服务失败");
             throw;
         }
-
-        await base.StartAsync(cancellationToken);
     }
 
     public override async Task StopAsync(CancellationToken cancellationToken)
@@ -73,30 +79,21 @@ public class MqttHostedService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        // 保持服务运行
-        while (!stoppingToken.IsCancellationRequested)
+        _logger.LogDebug("MQTT托管服务后台任务已启动");
+        
+        // 保持服务运行，等待取消信号
+        try
         {
-            try
-            {
-                // 检查MQTT连接状态
-                if (!_mqttService.IsConnected)
-                {
-                    _logger.LogWarning("MQTT连接断开，等待重新连接...");
-                }
-
-                // 每30秒检查一次
-                await Task.Delay(30000, stoppingToken);
-            }
-            catch (OperationCanceledException)
-            {
-                // 正常取消，退出循环
-                break;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "MQTT托管服务运行异常");
-                await Task.Delay(5000, stoppingToken); // 等待5秒后继续
-            }
+            await Task.Delay(Timeout.Infinite, stoppingToken);
+        }
+        catch (OperationCanceledException)
+        {
+            // 正常取消，服务停止
+            _logger.LogDebug("MQTT托管服务后台任务已停止");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "MQTT托管服务运行异常");
         }
     }
 
@@ -123,6 +120,13 @@ public class MqttHostedService : BackgroundService
     {
         try
         {
+            // 检查主题是否在订阅列表中
+            if (!IsSubscribedTopic(topic))
+            {
+                _logger.LogDebug("忽略未订阅的主题: {Topic}", topic);
+                return;
+            }
+
             _logger.LogDebug("收到MQTT消息，主题: {Topic}, 消息长度: {Length}", topic, message.Length);
             
             // 创建消息处理器并处理消息
@@ -136,46 +140,33 @@ public class MqttHostedService : BackgroundService
     }
 
     /// <summary>
+    /// 检查主题是否在订阅列表中（精确匹配）
+    /// </summary>
+    private bool IsSubscribedTopic(string topic)
+    {
+        var subscribedTopics = _mqttOptions.Topics.Subscribe;
+        
+        if (subscribedTopics == null || !subscribedTopics.Any())
+        {
+            return false;
+        }
+
+        // 只进行精确匹配，不支持通配符匹配
+        return subscribedTopics.Contains(topic, StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// 订阅所有需要的主题
     /// </summary>
     private async Task SubscribeToTopics()
     {
-        var topics = new[]
+        var topics = _mqttOptions.Topics.Subscribe;
+
+        if (topics == null || !topics.Any())
         {
-            // 系统消息
-            "system/heartbeat",
-            "system/status", 
-            "system/config",
-            
-            //// 出库任务消息
-            //"outbound/task/created",
-            //"outbound/task/execute",
-            //"outbound/task/progress", 
-            //"outbound/task/completed",
-            //"outbound/task/cancelled",
-            
-            //// 设备消息（使用通配符）
-            //"device/+/status",
-            //"device/+/command",
-            //"device/+/response",
-            
-            // 传感器消息
-            "sensor/grating",
-            "sensor/data",
-            
-            // 运动控制消息
-            "motion/moving/complete",
-            //"motion/position",
-            "motion/status",
-            
-            // 视觉系统消息
-            "vision/detection",
-            "vision/result",
-            
-            // 读码器消息
-            "coder/result",
-            "coder/complete"
-        };
+            _logger.LogWarning("配置中未找到需要订阅的主题");
+            return;
+        }
 
         foreach (var topic in topics)
         {
@@ -190,6 +181,6 @@ public class MqttHostedService : BackgroundService
             }
         }
         
-        _logger.LogInformation("完成主题订阅，共订阅 {Count} 个主题", topics.Length);
+        _logger.LogInformation("完成主题订阅，共订阅 {Count} 个主题", topics.Count);
     }
 } 

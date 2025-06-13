@@ -45,7 +45,6 @@ public abstract class BaseMessageHandler : IMessageHandler
         catch (Exception ex)
         {
             Logger.LogError(ex, "处理消息时发生异常 - 主题: {Topic}, 消息: {Message}", topic, message);
-            await HandleErrorAsync(topic, message, ex);
         }
     }
 
@@ -67,22 +66,6 @@ public abstract class BaseMessageHandler : IMessageHandler
     /// </summary>
     protected abstract IEnumerable<string> GetSupportedTopics();
 
-    /// <summary>
-    /// 处理错误
-    /// </summary>
-    protected virtual async Task HandleErrorAsync(string topic, string message, Exception exception)
-    {
-        var errorInfo = new
-        {
-            Topic = topic,
-            Message = message,
-            Error = exception.Message,
-            Timestamp = DateTime.UtcNow
-        };
-
-        var errorMessage = JsonSerializer.Serialize(errorInfo);
-        await MqttService.PublishAsync("system/error", errorMessage);
-    }
 
     /// <summary>
     /// 反序列化JSON消息

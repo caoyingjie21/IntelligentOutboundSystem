@@ -24,9 +24,6 @@ public class SensorMessageHandler : BaseMessageHandler
             case "sensor/grating":
                 await HandleGratingData(message);
                 break;
-            case "sensor/data":
-                await HandleSensorData(message);
-                break;
             default:
                 Logger.LogWarning("未知的传感器消息主题: {Topic}", topic);
                 break;
@@ -38,7 +35,6 @@ public class SensorMessageHandler : BaseMessageHandler
         return new[]
         {
             "sensor/grating",
-            "sensor/data"
         };
     }
 
@@ -51,64 +47,30 @@ public class SensorMessageHandler : BaseMessageHandler
             return;
         }
 
-        Logger.LogInformation("收到光栅传感器数据: 状态={Status}, 位置={Position}", 
-            gratingData.Status, gratingData.Position);
+        Logger.LogInformation("收到光栅传感器数据: 方向={Direction}",
+            gratingData.Direction);
 
-        // 存储传感器数据
-        SharedDataService.SetData("sensor:grating:current", gratingData);
-        SharedDataService.SetData("sensor:grating:last_update", DateTime.UtcNow);
+        // 存储光栅发送过来的方向
+        SharedDataService.SetData("sensor:grating", gratingData);
 
         // 触发相关任务处理
         await ProcessGratingEvent(gratingData);
     }
 
-    private async Task HandleSensorData(string message)
-    {
-        var sensorData = DeserializeMessage<SensorData>(message);
-        if (sensorData == null)
-        {
-            Logger.LogError("解析传感器数据失败: {Message}", message);
-            return;
-        }
-
-        Logger.LogInformation("收到传感器数据: 传感器ID={SensorId}, 值={Value}", 
-            sensorData.SensorId, sensorData.Value);
-
-        // 存储传感器数据
-        SharedDataService.SetData($"sensor:{sensorData.SensorId}:current", sensorData);
-        SharedDataService.SetData($"sensor:{sensorData.SensorId}:last_update", DateTime.UtcNow);
-
-        await Task.CompletedTask;
-    }
-
     private async Task ProcessGratingEvent(GratingData gratingData)
     {
         // 处理光栅传感器事件
-        if (gratingData.Status == "blocked")
+        if (!string.IsNullOrEmpty(gratingData.Direction))
         {
-            Logger.LogInformation("检测到物体阻挡光栅，触发处理流程");
+            Logger.LogInformation("方向接收成功,执行高度检测");
             
             var notification = new
             {
-                Event = "grating_blocked",
-                Position = gratingData.Position,
+                Direction = gratingData.Direction,
                 Timestamp = DateTime.UtcNow
             };
             
-            await MqttService.PublishAsync("system/events/grating_blocked", SerializeObject(notification));
-        }
-        else if (gratingData.Status == "clear")
-        {
-            Logger.LogInformation("光栅传感器恢复正常");
-            
-            var notification = new
-            {
-                Event = "grating_clear",
-                Position = gratingData.Position,
-                Timestamp = DateTime.UtcNow
-            };
-            
-            await MqttService.PublishAsync("system/events/grating_clear", SerializeObject(notification));
+            await MqttService.PublishAsync("vision/height", SerializeObject(notification));
         }
     }
 }
@@ -117,17 +79,7 @@ public class SensorMessageHandler : BaseMessageHandler
 
 public class GratingData
 {
-    public string Status { get; set; } = string.Empty;
-    public double Position { get; set; }
-    public DateTime Timestamp { get; set; }
-}
-
-public class SensorData
-{
-    public string SensorId { get; set; } = string.Empty;
-    public double Value { get; set; }
-    public string Unit { get; set; } = string.Empty;
-    public DateTime Timestamp { get; set; }
+    public string Direction { get; set; } = string.Empty;
 }
 
 #endregion 

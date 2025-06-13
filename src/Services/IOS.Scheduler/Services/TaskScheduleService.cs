@@ -205,6 +205,82 @@ public class TaskScheduleService : ITaskScheduleService
             throw;
         }
     }
+
+    /// <summary>
+    /// 获取活跃任务数量
+    /// </summary>
+    /// <returns>活跃任务数量</returns>
+    public int GetActiveTaskCount()
+    {
+        try
+        {
+            return _scheduleTasks.Values.Count(t => t.Status == TaskStatus.Running || t.Status == TaskStatus.Ready);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "获取活跃任务数量失败");
+            return 0;
+        }
+    }
+
+    /// <summary>
+    /// 获取所有任务
+    /// </summary>
+    /// <returns>所有任务列表</returns>
+    public List<object> GetAllTasks()
+    {
+        try
+        {
+            return _scheduleTasks.Values.Select(t => new
+            {
+                Id = t.Id,
+                Name = t.Name,
+                JobType = t.JobType,
+                Status = t.Status.ToString(),
+                CronExpression = t.CronExpression,
+                CreatedAt = t.CreatedAt,
+            }).Cast<object>().ToList();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "获取所有任务失败");
+            return new List<object>();
+        }
+    }
+
+    /// <summary>
+    /// 创建任务
+    /// </summary>
+    /// <param name="taskType">任务类型</param>
+    /// <param name="parameters">任务参数</param>
+    /// <returns>任务ID</returns>
+    public async Task<string> CreateTaskAsync(string taskType, Dictionary<string, object>? parameters = null)
+    {
+        try
+        {
+            var taskId = Guid.NewGuid().ToString();
+            var task = new ScheduleTask
+            {
+                Id = taskId,
+                Name = $"{taskType}_Task_{DateTime.Now:yyyyMMddHHmmss}",
+                JobType = taskType,
+                CronExpression = "0 0/5 * * * ?", // 默认每5分钟执行一次
+                Status = TaskStatus.Ready,
+                CreatedAt = DateTime.UtcNow,
+                Parameters = parameters ?? new Dictionary<string, object>()
+            };
+
+            await CreateScheduleAsync(task);
+            
+            _logger.LogInformation("创建任务成功: {TaskId}, 类型: {TaskType}", taskId, taskType);
+            return taskId;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "创建任务失败: 类型: {TaskType}", taskType);
+            throw;
+        }
+    }
 }
 
 /// <summary>

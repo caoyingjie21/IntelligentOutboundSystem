@@ -23,21 +23,18 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+// 添加静态文件服务支持
+builder.Services.AddDirectoryBrowser();
+
 // 添加Quartz调度器
 builder.Services.AddQuartz(q =>
 {
-    // 添加示例任务
-    var heartbeatJobKey = new JobKey("HeartbeatJob");
-    //q.AddJob<HeartbeatJob>(opts => opts.WithIdentity(heartbeatJobKey));
-
-    //q.AddTrigger(opts => opts
-    //    .ForJob(heartbeatJobKey)
-    //    .WithIdentity("HeartbeatJob-trigger")
-    //    .WithCronSchedule("0/30 * * * * ?") // 每分钟执行一次
-    //);
+    // 配置Quartz但不添加预定义任务
+    // 任务将通过TaskScheduleService动态创建
 });
 
-builder.Services.AddQuartzHostedService(q => q.WaitForJobsToComplete = true);
+// 注释掉QuartzHostedService以避免"Batch acquisition of 0 triggers"日志
+// builder.Services.AddQuartzHostedService(q => q.WaitForJobsToComplete = true);
 
 // 添加核心服务
 builder.Services.AddSingleton<SharedDataService>();
@@ -47,9 +44,6 @@ builder.Services.AddSingleton<MessageHandlerFactory>();
 builder.Services.AddHostedService<MqttHostedService>();
 
 // 注册所有消息处理器
-builder.Services.AddTransient<SystemMessageHandler>();
-builder.Services.AddTransient<OutboundTaskHandler>();
-builder.Services.AddTransient<DeviceMessageHandler>();
 builder.Services.AddTransient<SensorMessageHandler>();
 builder.Services.AddTransient<MotionControlHandler>();
 builder.Services.AddTransient<VisionMessageHandler>();
@@ -77,9 +71,29 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+// 配置默认文件（必须在UseStaticFiles之前）
+app.UseDefaultFiles(new DefaultFilesOptions
+{
+    DefaultFileNames = new List<string> { "index.html" }
+});
+
+// 启用静态文件服务
+app.UseStaticFiles(new StaticFileOptions
+{
+    ServeUnknownFileTypes = true
+});
+
+app.UseDirectoryBrowser();
+
 app.UseRouting();
 
 app.UseAuthorization();
+
+// 根路径重定向到管理界面（在MapControllers之前）
+app.MapGet("/", async context =>
+{
+    context.Response.Redirect("/index.html", permanent: false);
+});
 
 app.MapControllers();
 

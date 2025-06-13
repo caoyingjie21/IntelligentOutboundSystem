@@ -363,6 +363,94 @@ class QtVisionSick:
             return []
 
     @require_connection
+    def get_min_z_coordinate(self):
+        """
+        获取最小z坐标，使用高效的分块平均算法
+        算法步骤：
+        1. 获取整张图的z坐标数据
+        2. 将图像分为16x16的块
+        3. 对每个块去除前后10%的异常值
+        4. 计算每块的平均值
+        5. 返回所有块平均值中的最小值
+        
+        Returns:
+            float: 最小的块平均z坐标值，如果没有有效数据则返回0
+        """
+        try:
+            # 获取z坐标数据
+            z_coordinates = self.get_z_coordinates()
+            if not z_coordinates:
+                self.logger.error("无法获取z坐标数据")
+                return 0.0
+            
+            # 获取相机参数以确定图像尺寸
+            camera_params = self.get_camera_params()
+            if not camera_params:
+                # 尝试获取一帧数据来获取相机参数
+                myData = self._get_parsed_frame_data()
+                camera_params = myData.cameraParams
+            
+            if not camera_params:
+                self.logger.error("无法获取相机参数")
+                return 0.0
+            
+            width = camera_params.width
+            height = camera_params.height
+            
+            # 将z坐标数据转换为numpy数组并重塑为图像形状
+            z_array = np.array(z_coordinates).reshape((height, width))
+            
+            # 分块参数
+            num_blocks = 16  # 16x16的块
+            block_height = height // num_blocks
+            block_width = width // num_blocks
+            
+            block_averages = []
+            
+            # 对每个块进行处理
+            for i in range(num_blocks):
+                for j in range(num_blocks):
+                    # 计算当前块的边界
+                    start_row = i * block_height
+                    end_row = min((i + 1) * block_height, height)
+                    start_col = j * block_width
+                    end_col = min((j + 1) * block_width, width)
+                    
+                    # 提取当前块的z值
+                    block_z = z_array[start_row:end_row, start_col:end_col]
+                    
+                    # 过滤有效的z值（大于0）
+                    valid_z = block_z[block_z > 0]
+                    
+                    if len(valid_z) > 0:
+                        # 去掉前10%和后10%的点（去除异常值）
+                        num_points_to_remove = int(np.ceil(len(valid_z) * 0.1))
+                        if num_points_to_remove > 0 and len(valid_z) > 2 * num_points_to_remove:
+                            valid_z_sorted = np.sort(valid_z)
+                            # 去除前10%和后10%
+                            trimmed_z = valid_z_sorted[num_points_to_remove:-num_points_to_remove]
+                        else:
+                            trimmed_z = valid_z
+                        
+                        # 计算当前块的平均值
+                        if len(trimmed_z) > 0:
+                            block_average = np.mean(trimmed_z)
+                            block_averages.append(block_average)
+            
+            # 返回所有块平均值中的最小值
+            if block_averages:
+                min_average = min(block_averages)
+                self.logger.info(f"计算得到的最小块平均z坐标: {min_average}")
+                return min_average
+            else:
+                self.logger.warning("没有有效的块数据")
+                return 0.0
+                
+        except Exception as e:
+            self.logger.error(f"获取最小z坐标失败: {e}")
+            return 0.0
+
+    @require_connection
     def get_frame(self):
         """
         获取当前帧数据

@@ -27,9 +27,9 @@ public class MessageHandlerFactory
         return new Dictionary<string, Type>
         {
             // 系统消息
-            { "system/heartbeat", typeof(SystemMessageHandler) },
-            { "system/status", typeof(SystemMessageHandler) },
-            { "system/config", typeof(SystemMessageHandler) },
+            //{ "system/heartbeat", typeof(SystemMessageHandler) },
+            //{ "system/status", typeof(SystemMessageHandler) },
+            //{ "system/config", typeof(SystemMessageHandler) },
             
             //// 出库任务消息
             //{ "outbound/task/created", typeof(OutboundTaskHandler) },
@@ -76,15 +76,6 @@ public class MessageHandlerFactory
             if (_handlerMappings.TryGetValue(topic, out var exactHandlerType))
             {
                 return CreateHandlerInstance(exactHandlerType, topic);
-            }
-
-            // 通配符匹配
-            foreach (var (pattern, handlerType) in _handlerMappings)
-            {
-                if (IsTopicMatch(topic, pattern))
-                {
-                    return CreateHandlerInstance(handlerType, topic);
-                }
             }
 
             // 如果没有找到特定处理器，返回默认处理器

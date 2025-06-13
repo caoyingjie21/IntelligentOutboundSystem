@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IOS调度器管理界面</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .section {
+            margin-bottom: 40px;
+            padding: 25px;
+            border: 1px solid #e0e0e0;
+            border-radius: 10px;
+            background: #fafafa;
+        }
+
+        .section h2 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+            border-bottom: 2px solid #4facfe;
+            padding-bottom: 10px;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+        }
+
+        .btn.success {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        }
+
+        .btn.warning {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #4facfe;
+        }
+
+        .result {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+            font-family: 'Courier New', monospace;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #4facfe;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .status-card {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 10px 0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            border-left: 4px solid #4facfe;
+        }
+
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            margin: 10px 0;
+            padding: 5px 0;
+            border-bottom: 1px solid #eee;
+        }
+
+        .status-item:last-child {
+            border-bottom: none;
+        }
+
+        .status-label {
+            font-weight: 600;
+            color: #666;
+        }
+
+        .status-value {
+            color: #333;
+            font-weight: 500;
+        }
+
+        .mqtt-topics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .topic-card {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .topic-name {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .topic-status {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .topic-status.active {
+            color: #28a745;
+        }
+
+        .mqtt-messages {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 15px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
+
+        .mqtt-message {
+            margin-bottom: 10px;
+            padding: 8px;
+            background: white;
+            border-left: 3px solid #4facfe;
+            border-radius: 4px;
+        }
+
+        .message-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+            font-weight: 600;
+        }
+
+        .message-topic {
+            color: #4facfe;
+        }
+
+        .message-time {
+            color: #666;
+            font-size: 11px;
+        }
+
+        .message-content {
+            color: #333;
+            word-break: break-all;
+        }
+
+        .clear-btn {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+            margin-left: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 IOS调度器管理界面</h1>
+            <p>智能出库系统调度器控制面板</p>
+        </div>
+
+        <div class="content">
+            <!-- 系统状态部分 -->
+            <div class="section">
+                <h2>📊 系统状态</h2>
+                <div class="button-group">
+                    <button class="btn success" onclick="getStatus()">获取系统状态</button>
+                    <button class="btn" onclick="getSharedData()">获取共享数据</button>
+                </div>
+                <div id="statusResult" class="result" style="display: none;"></div>
+            </div>
+
+            <!-- MQTT消息部分 -->
+            <div class="section">
+                <h2>📡 MQTT消息监控</h2>
+                
+                <!-- 监听的主题列表 -->
+                <h3>📋 监听主题</h3>
+                <div id="mqttTopics" class="mqtt-topics">
+                    <!-- 主题卡片将通过JavaScript动态生成 -->
+                </div>
+
+                <!-- 发送消息 -->
+                <h3>📤 发送消息</h3>
+                <div class="form-group">
+                    <label for="mqttTopic">MQTT主题:</label>
+                    <input type="text" id="mqttTopic" placeholder="例如: system/test" value="system/test">
+                </div>
+                <div class="form-group">
+                    <label for="mqttMessage">消息内容:</label>
+                    <textarea id="mqttMessage" rows="3" placeholder="输入要发送的消息内容"></textarea>
+                </div>
+                <div class="button-group">
+                    <button class="btn warning" onclick="sendMqttMessage()">发送MQTT消息</button>
+                    <button class="btn clear-btn" onclick="clearMessages()">清空消息</button>
+                </div>
+
+                <!-- 实时消息显示 -->
+                <h3>📨 实时消息 <span id="messageCount">(0)</span></h3>
+                <div id="mqttMessages" class="mqtt-messages">
+                    <div style="text-align: center; color: #666; padding: 20px;">
+                        等待MQTT消息...
+                    </div>
+                </div>
+                
+                <div id="mqttResult" class="result" style="display: none;"></div>
+            </div>
+
+            <!-- 加载指示器 -->
+            <div id="loading" class="loading">
+                <div class="spinner"></div>
+                <p>正在处理请求...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api/scheduler';
+        let messageCount = 0;
+        let mqttMessages = [];
+
+        // 监听的MQTT主题列表（从配置中获取）
+        const subscribedTopics = [
+            'system/+',
+            'outbound/task/+',
+            'device/+/+',
+            'sensor/+',
+            'motion/+',
+            'vision/+',
+            'coder/+'
+        ];
+
+        // 显示加载状态
+        function showLoading() {
+            document.getElementById('loading').style.display = 'block';
+        }
+
+        // 隐藏加载状态
+        function hideLoading() {
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        // 显示结果
+        function showResult(elementId, data, isError = false) {
+            const element = document.getElementById(elementId);
+            element.style.display = 'block';
+            element.style.color = isError ? '#dc3545' : '#333';
+            element.style.backgroundColor = isError ? '#f8d7da' : '#f8f9fa';
+            element.textContent = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+        }
+
+        // 通用API请求函数
+        async function apiRequest(url, options = {}) {
+            showLoading();
+            try {
+                const response = await fetch(url, {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...options.headers
+                    },
+                    ...options
+                });
+
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.error || `HTTP ${response.status}`);
+                }
+
+                return data;
+            } catch (error) {
+                throw new Error(`请求失败: ${error.message}`);
+            } finally {
+                hideLoading();
+            }
+        }
+
+        // 获取系统状态
+        async function getStatus() {
+            try {
+                const data = await apiRequest(`${API_BASE}/status`);
+                showResult('statusResult', data);
+            } catch (error) {
+                showResult('statusResult', error.message, true);
+            }
+        }
+
+        // 获取共享数据
+        async function getSharedData() {
+            try {
+                const data = await apiRequest(`${API_BASE}/shared-data`);
+                showResult('statusResult', data);
+            } catch (error) {
+                showResult('statusResult', error.message, true);
+            }
+        }
+
+        // 发送MQTT消息
+        async function sendMqttMessage() {
+            const topic = document.getElementById('mqttTopic').value.trim();
+            const message = document.getElementById('mqttMessage').value.trim();
+
+            if (!topic || !message) {
+                showResult('mqttResult', '主题和消息内容不能为空', true);
+                return;
+            }
+
+            try {
+                const data = await apiRequest(`${API_BASE}/mqtt/send`, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        topic: topic,
+                        message: message
+                    })
+                });
+                showResult('mqttResult', data);
+                
+                // 清空输入框
+                document.getElementById('mqttMessage').value = '';
+            } catch (error) {
+                showResult('mqttResult', error.message, true);
+            }
+        }
+
+        // 初始化MQTT主题显示
+        function initMqttTopics() {
+            const topicsContainer = document.getElementById('mqttTopics');
+            topicsContainer.innerHTML = '';
+
+            subscribedTopics.forEach(topic => {
+                const topicCard = document.createElement('div');
+                topicCard.className = 'topic-card';
+                topicCard.innerHTML = `
+                    <div class="topic-name">${topic}</div>
+                    <div class="topic-status active">● 监听中</div>
+                `;
+                topicsContainer.appendChild(topicCard);
+            });
+        }
+
+        // 添加MQTT消息到显示区域
+        function addMqttMessage(topic, message, timestamp = null) {
+            messageCount++;
+            const time = timestamp || new Date().toLocaleString();
+            
+            const messageObj = {
+                topic: topic,
+                message: message,
+                time: time,
+                id: messageCount
+            };
+            
+            mqttMessages.unshift(messageObj); // 新消息添加到开头
+            
+            // 限制消息数量，只保留最新的100条
+            if (mqttMessages.length > 100) {
+                mqttMessages = mqttMessages.slice(0, 100);
+            }
+            
+            updateMessagesDisplay();
+            updateMessageCount();
+        }
+
+        // 更新消息显示
+        function updateMessagesDisplay() {
+            const messagesContainer = document.getElementById('mqttMessages');
+            
+            if (mqttMessages.length === 0) {
+                messagesContainer.innerHTML = `
+                    <div style="text-align: center; color: #666; padding: 20px;">
+                        等待MQTT消息...
+                    </div>
+                `;
+                return;
+            }
+
+            messagesContainer.innerHTML = mqttMessages.map(msg => `
+                <div class="mqtt-message">
+                    <div class="message-header">
+                        <span class="message-topic">${msg.topic}</span>
+                        <span class="message-time">${msg.time}</span>
+                    </div>
+                    <div class="message-content">${msg.message}</div>
+                </div>
+            `).join('');
+            
+            // 滚动到顶部显示最新消息
+            messagesContainer.scrollTop = 0;
+        }
+
+        // 更新消息计数
+        function updateMessageCount() {
+            document.getElementById('messageCount').textContent = `(${mqttMessages.length})`;
+        }
+
+        // 清空消息
+        function clearMessages() {
+            mqttMessages = [];
+            messageCount = 0;
+            updateMessagesDisplay();
+            updateMessageCount();
+        }
+
+        // 页面加载完成后的初始化
+        window.addEventListener('load', function() {
+            getStatus();
+            initMqttTopics();
+        });
+    </script>
+</body>
+</html> 
