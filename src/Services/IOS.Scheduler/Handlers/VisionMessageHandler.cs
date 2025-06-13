@@ -27,6 +27,9 @@ public class VisionMessageHandler : BaseMessageHandler
             case "vision/result":
                 await HandleVisionResult(message);
                 break;
+            case "vision/height/result":
+                await HandleVisionHeightResult(message);
+                break;
             default:
                 Logger.LogWarning("未知的视觉系统消息主题: {Topic}", topic);
                 break;
@@ -62,6 +65,20 @@ public class VisionMessageHandler : BaseMessageHandler
         await ProcessDetectionResult(detectionData);
     }
 
+    private async Task HandleVisionHeightResult(string message)
+    {
+        var heightData = DeserializeMessage<VisionHeightResultData>(message);
+        if (heightData == null)
+        {
+            Logger.LogError("解析视觉结果消息失败: {Message}", message);
+            return;
+        }
+        Logger.LogInformation("收到视觉高度结果: 高度={Height}", heightData.min_height);
+
+        SharedDataService.SetData("min_height", heightData.min_height);
+        await Task.CompletedTask;
+    }
+    
     private async Task HandleVisionResult(string message)
     {
         var resultData = DeserializeMessage<VisionResultData>(message);
@@ -76,10 +93,6 @@ public class VisionMessageHandler : BaseMessageHandler
 
         // 存储处理结果
         SharedDataService.SetData($"vision:{resultData.TaskId}:result", resultData);
-        
-        // 更新任务状态
-        SharedDataService.SetData($"task:{resultData.TaskId}:vision_status", "completed");
-        SharedDataService.SetData($"task:{resultData.TaskId}:vision_result", resultData.Result);
 
         await Task.CompletedTask;
     }
@@ -219,6 +232,12 @@ public class VisionResultData
     public string Result { get; set; } = string.Empty;
     public Dictionary<string, object>? AdditionalData { get; set; }
     public DateTime Timestamp { get; set; }
+}
+
+public class VisionHeightResultData
+{
+    public double min_height { get; set; }
+    public DateTime Timestamp { get; set; } = DateTime.UtcNow;
 }
 
 public class DetectedObject

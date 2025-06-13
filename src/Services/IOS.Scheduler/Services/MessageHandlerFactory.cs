@@ -56,6 +56,7 @@ public class MessageHandlerFactory
             // 视觉系统消息
             { "vision/detection", typeof(VisionMessageHandler) },
             { "vision/result", typeof(VisionMessageHandler) },
+            { "vision/height/result", typeof(VisionMessageHandler) },
             
             // 读码器消息
             { "coder/result", typeof(CoderMessageHandler) },
