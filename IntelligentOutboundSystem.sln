@@ -14,6 +14,10 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "IOS.CoderService", "src\Ser
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HostViewr", "HostViewr\HostViewr.csproj", "{22A37CD6-BFFC-4F3B-ADDD-C089F7EB3C90}"
 EndProject
+Project("{888888A0-9F3D-457C-B088-3A5042F75D52}") = "IOS.CameraService", "src\Services\IOS.CameraService\IOS.CameraService.pyproj", "{90983C1A-FC31-4D1D-B8DE-2CAADA5E683D}"
+EndProject
+Project("{888888A0-9F3D-457C-B088-3A5042F75D52}") = "IOS.DataService", "src\Services\IOS.DataService\IOS.DataService.pyproj", "{81FC78B1-EF22-4269-BF7B-6004931C7B26}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -46,6 +50,10 @@ Global
 		{22A37CD6-BFFC-4F3B-ADDD-C089F7EB3C90}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{22A37CD6-BFFC-4F3B-ADDD-C089F7EB3C90}.Release|Any CPU.Build.0 = Release|Any CPU
 		{22A37CD6-BFFC-4F3B-ADDD-C089F7EB3C90}.Release|Any CPU.Deploy.0 = Release|Any CPU
+		{90983C1A-FC31-4D1D-B8DE-2CAADA5E683D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{90983C1A-FC31-4D1D-B8DE-2CAADA5E683D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{81FC78B1-EF22-4269-BF7B-6004931C7B26}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{81FC78B1-EF22-4269-BF7B-6004931C7B26}.Release|Any CPU.ActiveCfg = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
