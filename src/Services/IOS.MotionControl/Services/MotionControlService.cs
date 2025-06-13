@@ -56,30 +56,30 @@ public class MotionControlService : IMotionControlService, IDisposable
 
         try
         {
-            _logger.LogInformation("开始初始化EtherCAT运动控制系统");
+            //_logger.LogInformation("开始初始化EtherCAT运动控制系统");
 
-            // 检查网络接口配置
-            if (string.IsNullOrEmpty(_options.EtherNet))
-            {
-                throw new InvalidOperationException("请配置EtherNet地址");
-            }
+            //// 检查网络接口配置
+            //if (string.IsNullOrEmpty(_options.EtherNet))
+            //{
+            //    throw new InvalidOperationException("请配置EtherNet地址");
+            //}
 
-            // 创建轴实例
-            _axis = new EtherCATSlave_CiA402_1(_etherCATMaster, _options.SlaveId);
+            //// 创建轴实例
+            //_axis = new EtherCATSlave_CiA402_1(_etherCATMaster, _options.SlaveId);
 
-            // 启动EtherCAT主站
-            _etherCATMaster.StartActivity(_options.EtherNet);
-            await Task.Delay(500);
+            //// 启动EtherCAT主站
+            //_etherCATMaster.StartActivity(_options.EtherNet);
+            //await Task.Delay(500);
 
-            // 配置轴参数
-            _etherCATMaster.WriteSDO<uint>(1, 0x6091, 0x01, 1);
-            _etherCATMaster.WriteSDO<uint>(1, 0x6091, 0x02, 1);
-            _etherCATMaster.WriteSDO<uint>(1, 0x6092, 0x01, 1000);
-            _etherCATMaster.WriteSDO<uint>(1, 0x6092, 0x02, 1);
+            //// 配置轴参数
+            //_etherCATMaster.WriteSDO<uint>(1, 0x6091, 0x01, 1);
+            //_etherCATMaster.WriteSDO<uint>(1, 0x6091, 0x02, 1);
+            //_etherCATMaster.WriteSDO<uint>(1, 0x6092, 0x01, 1000);
+            //_etherCATMaster.WriteSDO<uint>(1, 0x6092, 0x02, 1);
 
-            // 复位并上电
-            _axis.Reset();
-            _axis.PowerOn();
+            //// 复位并上电
+            //_axis.Reset();
+            //_axis.PowerOn();
 
             _isInitialized = true;
             _logger.LogInformation("EtherCAT运动控制系统初始化完成");
@@ -178,7 +178,8 @@ public class MotionControlService : IMotionControlService, IDisposable
     {
         await Task.CompletedTask;
 
-        if (!_isInitialized || _axis == null)
+ //|| _axis == null
+        if (!_isInitialized)
         {
             return new MotionStatus
             {

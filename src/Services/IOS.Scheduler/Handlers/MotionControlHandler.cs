@@ -27,6 +27,9 @@ public class MotionControlHandler : BaseMessageHandler
             case "motion/position":
                 await HandlePositionUpdate(message);
                 break;
+            case "motion/status":
+                await HandleStatusRecieve(message);
+                break;
             default:
                 Logger.LogWarning("未知的运动控制消息主题: {Topic}", topic);
                 break;
@@ -62,6 +65,10 @@ public class MotionControlHandler : BaseMessageHandler
         await TriggerNextStep(motionData.TaskId);
     }
 
+    private async Task HandleStatusRecieve(string message)
+    {
+        Logger.LogInformation($"Status recieve: {message}");
+    }
     private async Task HandlePositionUpdate(string message)
     {
         var positionData = DeserializeMessage<PositionData>(message);

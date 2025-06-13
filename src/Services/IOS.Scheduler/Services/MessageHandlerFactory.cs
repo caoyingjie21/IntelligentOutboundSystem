@@ -31,17 +31,17 @@ public class MessageHandlerFactory
             { "system/status", typeof(SystemMessageHandler) },
             { "system/config", typeof(SystemMessageHandler) },
             
-            // 出库任务消息
-            { "outbound/task/created", typeof(OutboundTaskHandler) },
-            { "outbound/task/execute", typeof(OutboundTaskHandler) },
-            { "outbound/task/progress", typeof(OutboundTaskHandler) },
-            { "outbound/task/completed", typeof(OutboundTaskHandler) },
-            { "outbound/task/cancelled", typeof(OutboundTaskHandler) },
+            //// 出库任务消息
+            //{ "outbound/task/created", typeof(OutboundTaskHandler) },
+            //{ "outbound/task/execute", typeof(OutboundTaskHandler) },
+            //{ "outbound/task/progress", typeof(OutboundTaskHandler) },
+            //{ "outbound/task/completed", typeof(OutboundTaskHandler) },
+            //{ "outbound/task/cancelled", typeof(OutboundTaskHandler) },
             
-            // 设备消息
-            { "device/+/status", typeof(DeviceMessageHandler) },
-            { "device/+/command", typeof(DeviceMessageHandler) },
-            { "device/+/response", typeof(DeviceMessageHandler) },
+            //// 设备消息
+            //{ "device/+/status", typeof(DeviceMessageHandler) },
+            //{ "device/+/command", typeof(DeviceMessageHandler) },
+            //{ "device/+/response", typeof(DeviceMessageHandler) },
             
             // 传感器消息
             { "sensor/grating", typeof(SensorMessageHandler) },
@@ -50,6 +50,8 @@ public class MessageHandlerFactory
             // 运动控制消息
             { "motion/moving/complete", typeof(MotionControlHandler) },
             { "motion/position", typeof(MotionControlHandler) },
+            { "motion/status", typeof(MotionControlHandler) },
+
             
             // 视觉系统消息
             { "vision/detection", typeof(VisionMessageHandler) },

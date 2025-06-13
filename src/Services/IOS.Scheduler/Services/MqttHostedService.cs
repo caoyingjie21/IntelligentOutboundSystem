@@ -147,17 +147,17 @@ public class MqttHostedService : BackgroundService
             "system/status", 
             "system/config",
             
-            // 出库任务消息
-            "outbound/task/created",
-            "outbound/task/execute",
-            "outbound/task/progress", 
-            "outbound/task/completed",
-            "outbound/task/cancelled",
+            //// 出库任务消息
+            //"outbound/task/created",
+            //"outbound/task/execute",
+            //"outbound/task/progress", 
+            //"outbound/task/completed",
+            //"outbound/task/cancelled",
             
-            // 设备消息（使用通配符）
-            "device/+/status",
-            "device/+/command",
-            "device/+/response",
+            //// 设备消息（使用通配符）
+            //"device/+/status",
+            //"device/+/command",
+            //"device/+/response",
             
             // 传感器消息
             "sensor/grating",
@@ -165,7 +165,8 @@ public class MqttHostedService : BackgroundService
             
             // 运动控制消息
             "motion/moving/complete",
-            "motion/position",
+            //"motion/position",
+            "motion/status",
             
             // 视觉系统消息
             "vision/detection",

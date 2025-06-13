@@ -309,12 +309,7 @@ public class MotionControlHostedService : BackgroundService
                 Type = MessageType.Response,
                 Data = status
             };
-
             await _mqttService.PublishAsync(_options.Topics.Sends.Status, statusMessage);
-            
-            // 同时发布位置信息
-            await _mqttService.PublishAsync(_options.Topics.Sends.Position, 
-                JsonSerializer.Serialize(new { Position = status.Position, Timestamp = status.Timestamp }));
         }
         catch (Exception ex)
         {

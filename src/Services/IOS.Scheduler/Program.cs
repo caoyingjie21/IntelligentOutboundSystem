@@ -28,13 +28,13 @@ builder.Services.AddQuartz(q =>
 {
     // 添加示例任务
     var heartbeatJobKey = new JobKey("HeartbeatJob");
-    q.AddJob<HeartbeatJob>(opts => opts.WithIdentity(heartbeatJobKey));
+    //q.AddJob<HeartbeatJob>(opts => opts.WithIdentity(heartbeatJobKey));
 
-    q.AddTrigger(opts => opts
-        .ForJob(heartbeatJobKey)
-        .WithIdentity("HeartbeatJob-trigger")
-        .WithCronSchedule("0/30 * * * * ?") // 每分钟执行一次
-    );
+    //q.AddTrigger(opts => opts
+    //    .ForJob(heartbeatJobKey)
+    //    .WithIdentity("HeartbeatJob-trigger")
+    //    .WithCronSchedule("0/30 * * * * ?") // 每分钟执行一次
+    //);
 });
 
 builder.Services.AddQuartzHostedService(q => q.WaitForJobsToComplete = true);
