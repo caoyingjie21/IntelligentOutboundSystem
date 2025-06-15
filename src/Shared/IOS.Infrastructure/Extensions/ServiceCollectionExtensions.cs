@@ -4,6 +4,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
 using Serilog;
+using Microsoft.Extensions.Hosting;
+using IOS.Shared.Configuration;
+using IOS.Shared.Services;
 
 namespace IOS.Infrastructure.Extensions;
 
@@ -19,6 +22,7 @@ public static class ServiceCollectionExtensions
     {
         // MQTT服务
         services.Configure<MqttOptions>(configuration.GetSection(MqttOptions.SectionName));
+        services.Configure<BaseOptions>(configuration.GetSection(BaseOptions.SectionName));
         services.AddSingleton<IMqttService, MqttService>();
 
         // 内存缓存
@@ -49,12 +53,54 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// 添加MQTT服务
+    /// 添加增强MQTT服务
     /// </summary>
-    public static IServiceCollection AddMqtt(this IServiceCollection services, IConfiguration configuration)
+    /// <param name="services">服务集合</param>
+    /// <param name="configuration">配置</param>
+    /// <param name="serviceName">服务名称</param>
+    /// <returns>服务集合</returns>
+    public static IServiceCollection AddEnhancedMqtt(
+        this IServiceCollection services,
+        IConfiguration configuration,
+        string serviceName)
     {
-        services.Configure<MqttOptions>(configuration.GetSection(MqttOptions.SectionName));
+        // 加载并配置MQTT选项
+        var mqttOptions = MqttConfigurationManager.LoadConfiguration(configuration, serviceName);
+        services.Configure<StandardMqttOptions>(options =>
+        {
+            options.ServiceName = mqttOptions.ServiceName;
+            options.Connection = mqttOptions.Connection;
+            options.Topics = mqttOptions.Topics;
+            options.Messages = mqttOptions.Messages;
+        });
+
+        // 注册服务
+        services.AddSingleton<TopicRegistry>();
+        services.AddSingleton<IEnhancedMqttService, EnhancedMqttService>();
+        services.AddSingleton<IMqttService>(provider => provider.GetRequiredService<IEnhancedMqttService>());
+        
+        // 注册托管服务
+        services.AddSingleton<IHostedService, MqttHostedService>();
+
+        return services;
+    }
+
+    /// <summary>
+    /// 添加标准MQTT服务（向后兼容）
+    /// </summary>
+    /// <param name="services">服务集合</param>
+    /// <param name="configuration">配置</param>
+    /// <returns>服务集合</returns>
+    public static IServiceCollection AddMqtt(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        // 配置MQTT选项
+        services.Configure<MqttOptions>(configuration.GetSection("Mqtt"));
+        
+        // 注册原始MQTT服务
         services.AddSingleton<IMqttService, MqttService>();
+        
         return services;
     }
 
@@ -116,6 +162,17 @@ public static class ServiceCollectionExtensions
 
         return services;
     }
+
+    /// <summary>
+    /// 添加主题注册服务
+    /// </summary>
+    /// <param name="services">服务集合</param>
+    /// <returns>服务集合</returns>
+    public static IServiceCollection AddTopicRegistry(this IServiceCollection services)
+    {
+        services.AddSingleton<TopicRegistry>();
+        return services;
+    }
 }
 
 /// <summary>
@@ -143,5 +200,28 @@ public class MqttHealthCheck : IHealthCheck
         {
             return HealthCheckResult.Unhealthy("MQTT健康检查异常", ex);
         }
+    }
+}
+
+/// <summary>
+/// MQTT托管服务
+/// </summary>
+internal class MqttHostedService : IHostedService
+{
+    private readonly IEnhancedMqttService _mqttService;
+
+    public MqttHostedService(IEnhancedMqttService mqttService)
+    {
+        _mqttService = mqttService;
+    }
+
+    public async Task StartAsync(CancellationToken cancellationToken)
+    {
+        await _mqttService.StartAsync(cancellationToken);
+    }
+
+    public async Task StopAsync(CancellationToken cancellationToken)
+    {
+        await _mqttService.StopAsync(cancellationToken);
     }
 } 

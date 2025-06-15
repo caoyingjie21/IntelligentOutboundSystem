@@ -233,6 +233,7 @@ class CameraMqtt:
             # 处理消息内容
             if isinstance(payload, (dict, list)):
                 message = json.dumps(payload, ensure_ascii=False)
+                print(message)
             else:
                 message = str(payload)
             

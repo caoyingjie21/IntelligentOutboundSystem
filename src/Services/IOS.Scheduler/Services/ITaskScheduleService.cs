@@ -49,37 +49,6 @@ public interface ITaskScheduleService
 }
 
 /// <summary>
-/// 出库任务服务接口
-/// </summary>
-public interface IOutboundTaskService
-{
-    /// <summary>
-    /// 创建出库任务
-    /// </summary>
-    Task<string> CreateOutboundTaskAsync(OutboundTaskRequest request, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// 执行出库任务
-    /// </summary>
-    Task ExecuteOutboundTaskAsync(string taskId, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// 取消出库任务
-    /// </summary>
-    Task CancelOutboundTaskAsync(string taskId, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// 获取任务进度
-    /// </summary>
-    Task<OutboundTaskProgress> GetTaskProgressAsync(string taskId, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// 获取待执行任务
-    /// </summary>
-    Task<IEnumerable<OutboundTask>> GetPendingTasksAsync(CancellationToken cancellationToken = default);
-}
-
-/// <summary>
 /// 调度任务
 /// </summary>
 public class ScheduleTask
@@ -98,50 +67,6 @@ public class ScheduleTask
     public TaskStatus Status { get; set; } = TaskStatus.Ready;
 }
 
-/// <summary>
-/// 出库任务请求
-/// </summary>
-public class OutboundTaskRequest
-{
-    public string OrderId { get; set; } = string.Empty;
-    public string ProductCode { get; set; } = string.Empty;
-    public int Quantity { get; set; }
-    public string TargetLocation { get; set; } = string.Empty;
-    public TaskPriority Priority { get; set; } = TaskPriority.Normal;
-    public Dictionary<string, object> Parameters { get; set; } = new();
-}
-
-/// <summary>
-/// 出库任务
-/// </summary>
-public class OutboundTask
-{
-    public string Id { get; set; } = Guid.NewGuid().ToString();
-    public string OrderId { get; set; } = string.Empty;
-    public string ProductCode { get; set; } = string.Empty;
-    public int Quantity { get; set; }
-    public string TargetLocation { get; set; } = string.Empty;
-    public TaskPriority Priority { get; set; } = TaskPriority.Normal;
-    public TaskStatus Status { get; set; } = TaskStatus.Ready;
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-    public DateTime? StartedAt { get; set; }
-    public DateTime? CompletedAt { get; set; }
-    public string? ErrorMessage { get; set; }
-    public Dictionary<string, object> Parameters { get; set; } = new();
-}
-
-/// <summary>
-/// 出库任务进度
-/// </summary>
-public class OutboundTaskProgress
-{
-    public string TaskId { get; set; } = string.Empty;
-    public TaskStatus Status { get; set; }
-    public int ProgressPercentage { get; set; }
-    public string CurrentStep { get; set; } = string.Empty;
-    public string? Message { get; set; }
-    public DateTime LastUpdated { get; set; } = DateTime.UtcNow;
-}
 
 /// <summary>
 /// 任务状态

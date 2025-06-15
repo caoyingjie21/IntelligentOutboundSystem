@@ -1,6 +1,12 @@
 using IOS.Infrastructure.Messaging;
 using IOS.Scheduler.Services;
+using IOS.Shared.Messages;
+using IOS.Shared.Models;
+
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+
+using System.ComponentModel.Design;
 
 namespace IOS.Scheduler.Handlers;
 
@@ -9,12 +15,15 @@ namespace IOS.Scheduler.Handlers;
 /// </summary>
 public class VisionMessageHandler : BaseMessageHandler
 {
+    private readonly BaseOptions _baseOptions;
+
     public VisionMessageHandler(
         ILogger<VisionMessageHandler> logger,
         SharedDataService sharedDataService,
-        IMqttService mqttService)
+        IMqttService mqttService, IOptions<BaseOptions> baseOptions)
         : base(logger, sharedDataService, mqttService)
     {
+        _baseOptions = baseOptions.Value;
     }
 
     protected override async Task ProcessMessageAsync(string topic, string message)
@@ -36,12 +45,14 @@ public class VisionMessageHandler : BaseMessageHandler
         }
     }
 
+    // 暂时使用硬编码 TODO:写到appsetting中
     protected override IEnumerable<string> GetSupportedTopics()
     {
         return new[]
         {
             "vision/detection",
-            "vision/result"
+            "vision/result",
+            "vision/height/result"
         };
     }
 
@@ -76,23 +87,22 @@ public class VisionMessageHandler : BaseMessageHandler
         Logger.LogInformation("收到视觉高度结果: 高度={Height}", heightData.min_height);
 
         SharedDataService.SetData("min_height", heightData.min_height);
-        await Task.CompletedTask;
+        // 计算移动脉冲数
+        // 初始高度 * 1000 - 距离高度*1000 = 剁高度
+        // 10mm = 1000pulse
+        var position = _baseOptions.HeightInit - heightData.min_height + _baseOptions.CoderHeight;
+        var motion = new MotionSendData() { Position = position };
+        var standardMessage = new StandardMessage<MotionSendData>() 
+        {
+            Data = motion,
+        };
+        // step3: 发送消息给电机
+        await MqttService.PublishAsync("motion/moving", SerializeObject(standardMessage));
     }
     
     private async Task HandleVisionResult(string message)
     {
-        var resultData = DeserializeMessage<VisionResultData>(message);
-        if (resultData == null)
-        {
-            Logger.LogError("解析视觉结果消息失败: {Message}", message);
-            return;
-        }
-
-        Logger.LogInformation("收到视觉处理结果: 任务ID={TaskId}, 结果={Result}", 
-            resultData.TaskId, resultData.Result);
-
-        // 存储处理结果
-        SharedDataService.SetData($"vision:{resultData.TaskId}:result", resultData);
+        
 
         await Task.CompletedTask;
     }
@@ -226,13 +236,7 @@ public class VisionDetectionData
     public DateTime Timestamp { get; set; }
 }
 
-public class VisionResultData
-{
-    public string TaskId { get; set; } = string.Empty;
-    public string Result { get; set; } = string.Empty;
-    public Dictionary<string, object>? AdditionalData { get; set; }
-    public DateTime Timestamp { get; set; }
-}
+
 
 public class VisionHeightResultData
 {

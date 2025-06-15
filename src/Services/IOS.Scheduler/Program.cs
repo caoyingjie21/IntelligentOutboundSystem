@@ -16,6 +16,9 @@ builder.Host.UseSerilog();
 // 添加基础设施服务
 builder.Services.AddInfrastructure(builder.Configuration);
 
+// 添加增强MQTT服务
+builder.Services.AddEnhancedMqtt(builder.Configuration, "Scheduler");
+
 // 添加控制器
 builder.Services.AddControllers();
 
@@ -52,7 +55,6 @@ builder.Services.AddTransient<DefaultMessageHandler>();
 
 // 添加业务服务
 builder.Services.AddScoped<ITaskScheduleService, TaskScheduleService>();
-builder.Services.AddScoped<IOutboundTaskService, OutboundTaskService>();
 
 // 添加Windows服务支持
 if (OperatingSystem.IsWindows())

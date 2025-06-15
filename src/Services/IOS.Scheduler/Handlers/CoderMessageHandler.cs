@@ -1,6 +1,7 @@
 using IOS.Infrastructure.Messaging;
 using IOS.Scheduler.Services;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace IOS.Scheduler.Handlers;
 

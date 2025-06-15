@@ -1,6 +1,9 @@
 using IOS.Infrastructure.Messaging;
 using IOS.MotionControl.Configuration;
 using IOS.Shared.Messages;
+using IOS.Shared.Models;
+using IOS.Shared.Utilities;
+
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -32,14 +35,15 @@ public class MotionControlHostedService : BackgroundService
 
     public override async Task StartAsync(CancellationToken cancellationToken)
     {
-        _logger.LogInformation("启动运动控制托管服务...");
-
         try
         {
+            _logger.LogInformation("运动控制托管服务启动中...");
+
             // 启动MQTT服务
-            await _mqttService.StartAsync(cancellationToken);
-            
-            // 订阅事件
+            await _mqttService.StartAsync();
+            _logger.LogInformation("MQTT服务启动成功");
+
+            // 订阅MQTT事件
             _mqttService.OnConnectionChanged += OnMqttConnectionChanged;
             _mqttService.OnMessageReceived += OnMqttMessageReceived;
 
@@ -51,67 +55,67 @@ public class MotionControlHostedService : BackgroundService
             }
 
             _logger.LogInformation("运动控制托管服务启动成功");
+            await base.StartAsync(cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "启动运动控制托管服务失败");
+            _logger.LogError(ex, "运动控制托管服务启动失败");
             throw;
         }
-
-        await base.StartAsync(cancellationToken);
     }
 
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
-        _logger.LogInformation("停止运动控制托管服务...");
-
         try
         {
-            // 关闭运动控制系统
-            await _motionControlService.ShutdownAsync();
+            _logger.LogInformation("运动控制托管服务停止中...");
 
-            // 取消订阅事件
+            // 取消订阅MQTT事件
             _mqttService.OnConnectionChanged -= OnMqttConnectionChanged;
             _mqttService.OnMessageReceived -= OnMqttMessageReceived;
 
             // 停止MQTT服务
-            await _mqttService.StopAsync(cancellationToken);
+            await _mqttService.StopAsync();
+            _logger.LogInformation("MQTT服务停止成功");
+
+            // 关闭运动控制系统
+            await _motionControlService.ShutdownAsync();
 
             _logger.LogInformation("运动控制托管服务停止成功");
+            await base.StopAsync(cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "停止运动控制托管服务失败");
+            _logger.LogError(ex, "运动控制托管服务停止失败");
+            throw;
         }
-
-        await base.StopAsync(cancellationToken);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        // 定期发送状态信息
+        _logger.LogInformation("运动控制托管服务开始执行");
+
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
-                if (_mqttService.IsConnected && _motionControlService.IsInitialized)
-                {
-                    await PublishStatusAsync();
-                }
-
-                // 每5秒发送一次状态
-                await Task.Delay(5000, stoppingToken);
+                // 定期发布状态信息
+                await PublishStatusAsync();
+                await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
             }
             catch (OperationCanceledException)
             {
+                // 正常取消，不记录错误
                 break;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "执行定期状态发送时发生错误");
-                await Task.Delay(1000, stoppingToken);
+                _logger.LogError(ex, "运动控制托管服务执行异常");
+                await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
             }
         }
+
+        _logger.LogInformation("运动控制托管服务执行结束");
     }
 
     /// <summary>
@@ -119,6 +123,8 @@ public class MotionControlHostedService : BackgroundService
     /// </summary>
     private async Task OnMqttConnectionChanged(bool isConnected)
     {
+        _logger.LogInformation("MQTT连接状态变更: {IsConnected}", isConnected);
+
         if (isConnected)
         {
             _logger.LogInformation("MQTT连接成功，开始订阅运动控制主题...");
@@ -137,24 +143,27 @@ public class MotionControlHostedService : BackgroundService
     {
         try
         {
-            _logger.LogDebug("收到MQTT消息，主题: {Topic}, 消息: {Message}", topic, message);
+            _logger.LogDebug("收到MQTT消息 - 主题: {Topic}, 消息: {Message}", topic, message);
 
-            if (topic == _options.Topics.Receives.Moving)
+            switch (topic)
             {
-                await HandleMovingMessageAsync(message);
-            }
-            else if (topic == _options.Topics.Receives.Back)
-            {
-                await HandleBackMessageAsync(message);
-            }
-            else if (topic == _options.Topics.Receives.Config)
-            {
-                await HandleConfigMessageAsync(message);
+                case var t when t == _options.Topics.Receives.Moving:
+                    await HandleMovingMessageAsync(message);
+                    break;
+                case var t when t == _options.Topics.Receives.Back:
+                    await HandleBackMessageAsync(message);
+                    break;
+                case var t when t == _options.Topics.Receives.Config:
+                    await HandleConfigMessageAsync(message);
+                    break;
+                default:
+                    _logger.LogWarning("未处理的MQTT主题: {Topic}", topic);
+                    break;
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "处理MQTT消息失败，主题: {Topic}", topic);
+            _logger.LogError(ex, "处理MQTT消息失败 - 主题: {Topic}, 消息: {Message}", topic, message);
         }
     }
 
@@ -165,35 +174,26 @@ public class MotionControlHostedService : BackgroundService
     {
         try
         {
-            var parts = message.Split(';');
-            if (parts.Length >= 2)
+            // 使用统一的JSON反序列化配置
+            if (!JsonHelper.TryDeserialize<MotionSendData>(message, out var motionMessage, out var error))
             {
-                var taskId = parts[0];
-                if (double.TryParse(parts[1], out var distanceInMm))
-                {
-                    // 转换为脉冲数 (假设1mm = 1000脉冲)
-                    var position = (int)(distanceInMm * 1000) * 100;
-
-                    _logger.LogInformation("执行运动命令，任务ID: {TaskId}, 距离: {Distance}mm, 位置: {Position}", 
-                        taskId, distanceInMm, position);
-
-                    await _motionControlService.MoveAbsoluteAsync(position);
-
-                    // 发送完成消息
-                    var completeMessage = $"{taskId};done";
-                    await _mqttService.PublishAsync(_options.Topics.Sends.MovingComplete, completeMessage);
-
-                    _logger.LogInformation("运动命令执行完成，任务ID: {TaskId}", taskId);
-                }
-                else
-                {
-                    _logger.LogWarning("无法解析运动距离: {Distance}", parts[1]);
-                }
+                _logger.LogError("无法解析运动数据: {Error}, 消息: {Message}", error, message);
+                return;
             }
-            else
-            {
-                _logger.LogWarning("运动命令消息格式错误: {Message}", message);
-            }
+            
+            _logger.LogInformation("收到运动数据: Position={Position}", motionMessage.Position);
+            
+            // 转换为脉冲数 (假设1mm = 1000脉冲)
+            var Pulse = (int)(motionMessage.Position * 1000) * 100;
+
+            _logger.LogInformation("执行运动命令, 脉冲: {Pulse}pulse", Pulse);
+
+            await _motionControlService.MoveAbsoluteAsync(Pulse);
+
+            // 发送完成消息
+            await _mqttService.PublishAsync(_options.Topics.Sends.MovingComplete, "test");
+
+            _logger.LogInformation("运动命令执行完成");
         }
         catch (Exception ex)
         {
@@ -221,7 +221,7 @@ public class MotionControlHostedService : BackgroundService
                 Data = new { Status = "Success", Position = _motionControlService.CurrentPosition }
             };
 
-            await _mqttService.PublishAsync(_options.Topics.Sends.MovingComplete, response);
+            await _mqttService.PublishAsync(_options.Topics.Sends.MovingComplete, JsonHelper.Serialize(response));
             _logger.LogInformation("回零命令执行完成");
         }
         catch (Exception ex)
@@ -256,7 +256,7 @@ public class MotionControlHostedService : BackgroundService
                 }
             };
 
-            await _mqttService.PublishAsync(_options.Topics.Sends.Status, configResponse);
+            await _mqttService.PublishAsync(_options.Topics.Sends.Status, JsonHelper.Serialize(configResponse));
         }
         catch (Exception ex)
         {
@@ -309,7 +309,7 @@ public class MotionControlHostedService : BackgroundService
                 Type = MessageType.Response,
                 Data = status
             };
-            await _mqttService.PublishAsync(_options.Topics.Sends.Status, statusMessage);
+            await _mqttService.PublishAsync(_options.Topics.Sends.Status, JsonHelper.Serialize(statusMessage));
         }
         catch (Exception ex)
         {

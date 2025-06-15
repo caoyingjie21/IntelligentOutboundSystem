@@ -16,6 +16,9 @@ builder.Host.UseSerilog();
 // 添加基础设施服务
 builder.Services.AddInfrastructure(builder.Configuration);
 
+// 添加增强MQTT服务
+builder.Services.AddEnhancedMqtt(builder.Configuration, "MotionControl");
+
 // 添加健康检查
 builder.Services.AddHealthChecks();
 

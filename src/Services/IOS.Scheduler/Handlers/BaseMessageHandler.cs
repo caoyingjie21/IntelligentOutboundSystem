@@ -1,6 +1,9 @@
 using IOS.Infrastructure.Messaging;
 using IOS.Scheduler.Services;
+using IOS.Shared.Utilities;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+
 using System.Text.Json;
 
 namespace IOS.Scheduler.Handlers;
@@ -25,26 +28,26 @@ public abstract class BaseMessageHandler : IMessageHandler
     }
 
     /// <summary>
-    /// 处理消息
+    /// 处理消息的主入口
     /// </summary>
     public async Task HandleMessageAsync(string topic, string message)
     {
         try
         {
-            Logger.LogInformation("开始处理消息 - 主题: {Topic}, 消息长度: {Length}", topic, message?.Length ?? 0);
-
-            if (string.IsNullOrEmpty(message))
+            Logger.LogDebug("开始处理消息 - 主题: {Topic}, 消息: {Message}", topic, message);
+            
+            if (!CanHandle(topic))
             {
-                Logger.LogWarning("收到空消息 - 主题: {Topic}", topic);
+                Logger.LogWarning("无法处理主题: {Topic}", topic);
                 return;
             }
 
             await ProcessMessageAsync(topic, message);
-            Logger.LogInformation("消息处理完成 - 主题: {Topic}", topic);
+            Logger.LogDebug("消息处理完成 - 主题: {Topic}", topic);
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "处理消息时发生异常 - 主题: {Topic}, 消息: {Message}", topic, message);
+            Logger.LogError(ex, "处理消息失败 - 主题: {Topic}, 消息: {Message}", topic, message);
         }
     }
 
@@ -53,11 +56,12 @@ public abstract class BaseMessageHandler : IMessageHandler
     /// </summary>
     public virtual bool CanHandle(string topic)
     {
-        return GetSupportedTopics().Any(supportedTopic => IsTopicMatch(topic, supportedTopic));
+        var supportedTopics = GetSupportedTopics();
+        return supportedTopics.Any(supportedTopic => IsTopicMatch(topic, supportedTopic));
     }
 
     /// <summary>
-    /// 处理消息的具体实现
+    /// 处理具体消息的抽象方法
     /// </summary>
     protected abstract Task ProcessMessageAsync(string topic, string message);
 
@@ -66,24 +70,17 @@ public abstract class BaseMessageHandler : IMessageHandler
     /// </summary>
     protected abstract IEnumerable<string> GetSupportedTopics();
 
-
     /// <summary>
     /// 反序列化JSON消息
     /// </summary>
     protected T? DeserializeMessage<T>(string message) where T : class
     {
-        try
+        if (!JsonHelper.TryDeserialize<T>(message, out var result, out var error))
         {
-            return JsonSerializer.Deserialize<T>(message, new JsonSerializerOptions
-            {
-                PropertyNameCaseInsensitive = true
-            });
-        }
-        catch (JsonException ex)
-        {
-            Logger.LogError(ex, "反序列化消息失败: {Message}", message);
+            Logger.LogError("反序列化消息失败: {Error}, 消息: {Message}", error, message);
             return null;
         }
+        return result;
     }
 
     /// <summary>
@@ -91,10 +88,7 @@ public abstract class BaseMessageHandler : IMessageHandler
     /// </summary>
     protected string SerializeObject<T>(T obj)
     {
-        return JsonSerializer.Serialize(obj, new JsonSerializerOptions
-        {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-        });
+        return JsonHelper.Serialize(obj);
     }
 
     /// <summary>

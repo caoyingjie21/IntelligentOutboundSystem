@@ -113,7 +113,8 @@ public class MotionControlService : IMotionControlService, IDisposable
 
         try
         {
-            _axis!.MoveAbsolute(position, moveSpeed, acceleration, deceleration);
+            // 未连接电机
+            //_axis!.MoveAbsolute(position, moveSpeed, acceleration, deceleration);
             
             // 估算运动时间并等待
             var estimatedTime = Math.Abs(startPosition - position) / (moveSpeed / 1000.0);

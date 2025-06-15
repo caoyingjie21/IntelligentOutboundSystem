@@ -1,4 +1,5 @@
 using IOS.Shared.Messages;
+using IOS.Shared.Configuration;
 
 namespace IOS.Infrastructure.Messaging;
 
@@ -56,6 +57,59 @@ public interface IMqttService : IDisposable
     /// 健康检查
     /// </summary>
     Task<bool> HealthCheckAsync(CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// 增强的MQTT服务接口
+/// </summary>
+public interface IEnhancedMqttService : IMqttService
+{
+    /// <summary>
+    /// 使用主题键发布消息
+    /// </summary>
+    /// <typeparam name="T">消息数据类型</typeparam>
+    /// <param name="topicKey">主题键</param>
+    /// <param name="data">消息数据</param>
+    /// <param name="priority">消息优先级</param>
+    /// <param name="correlationId">关联ID</param>
+    /// <param name="cancellationToken">取消令牌</param>
+    /// <returns>发布是否成功</returns>
+    Task<bool> PublishAsync<T>(
+        string topicKey, 
+        T data, 
+        MessagePriority priority = MessagePriority.Normal,
+        string? correlationId = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 使用主题键订阅消息
+    /// </summary>
+    /// <typeparam name="T">消息数据类型</typeparam>
+    /// <param name="topicKey">主题键</param>
+    /// <param name="handler">消息处理器</param>
+    /// <param name="filterType">消息类型过滤</param>
+    /// <param name="cancellationToken">取消令牌</param>
+    Task SubscribeAsync<T>(
+        string topicKey, 
+        Func<StandardMessage<T>, Task> handler,
+        MessageType? filterType = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 批量发布消息
+    /// </summary>
+    /// <param name="messages">消息列表</param>
+    /// <param name="cancellationToken">取消令牌</param>
+    /// <returns>发布结果</returns>
+    Task<BatchPublishResult> PublishBatchAsync(
+        IEnumerable<(string topic, string payload)> messages,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 获取服务统计信息
+    /// </summary>
+    /// <returns>统计信息</returns>
+    MqttServiceStatistics GetStatistics();
 }
 
 /// <summary>
@@ -127,6 +181,22 @@ public class MqttOptions
 }
 
 /// <summary>
+/// 基础配置
+/// </summary>
+public class BaseOptions 
+{
+    public const string SectionName = "Sample";
+
+    public double HeightInit { get; set; } = 0; // 起始高度
+
+    public double TrayHeight { get; set; } = 0; // 托盘高度
+
+    public double CameraHeight {  get; set; } = 0; // 相机高度
+
+    public double CoderHeight { get; set; } = 0; // 读码器高度
+}
+
+/// <summary>
 /// MQTT主题配置选项
 /// </summary>
 public class MqttTopicOptions
@@ -140,4 +210,71 @@ public class MqttTopicOptions
     /// 发布主题配置
     /// </summary>
     public Dictionary<string, string> Publish { get; set; } = new();
+}
+
+/// <summary>
+/// 批量发布结果
+/// </summary>
+public class BatchPublishResult
+{
+    /// <summary>
+    /// 成功发布的消息数量
+    /// </summary>
+    public int SuccessCount { get; set; }
+
+    /// <summary>
+    /// 失败的消息数量
+    /// </summary>
+    public int FailureCount { get; set; }
+
+    /// <summary>
+    /// 失败的消息详情
+    /// </summary>
+    public List<(string topic, string error)> Failures { get; set; } = new();
+
+    /// <summary>
+    /// 是否全部成功
+    /// </summary>
+    public bool IsAllSuccess => FailureCount == 0;
+}
+
+/// <summary>
+/// MQTT服务统计信息
+/// </summary>
+public class MqttServiceStatistics
+{
+    /// <summary>
+    /// 连接时间
+    /// </summary>
+    public DateTime? ConnectedAt { get; set; }
+
+    /// <summary>
+    /// 发布消息总数
+    /// </summary>
+    public long PublishedMessages { get; set; }
+
+    /// <summary>
+    /// 接收消息总数
+    /// </summary>
+    public long ReceivedMessages { get; set; }
+
+    /// <summary>
+    /// 订阅主题数量
+    /// </summary>
+    public int SubscribedTopics { get; set; }
+
+    /// <summary>
+    /// 重连次数
+    /// </summary>
+    public int ReconnectCount { get; set; }
+
+    /// <summary>
+    /// 最后一次消息时间
+    /// </summary>
+    public DateTime? LastMessageAt { get; set; }
+
+    /// <summary>
+    /// 连接状态
+    /// </summary>
+    public bool IsConnected { get; set; }
 } 

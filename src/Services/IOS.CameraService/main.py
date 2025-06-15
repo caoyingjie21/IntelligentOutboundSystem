@@ -1,24 +1,29 @@
+from dataclasses import dataclass
 from mqtt.CameraMqtt import CameraMqtt, MqttConfig, MqttQos
 import time
 import sys
+sys.path.append("./SDK")
+sys.path.append("E:\CaoSpace\IOS\IntelligentOutboundSystem\src\Services\IOS.CameraService\SDK")
 from SDK.SickSDK import QtVisionSick
 from logger import get_logger, LogLevel
+import json
 
 # 初始化日志器
 logger = get_logger("CameraService", log_level=LogLevel.INFO)
 
+
 def on_camera_command(topic: str, data, msg):
-  logger.info(f"收到调度器指令: {topic} -> {data}")
   try:
-    if data == "IN" or data == "OUT":
+    print(data)
+    direction = data["direction"]
+    logger.info(f"收到调度器指令: {topic} -> {direction}")
+    if direction == "IN" or direction == "OUT":
       # min_z = camera.get_min_z_coordinate()
       min_z = 2.1
-      logger.info(f"开始相机，方向: {data}, 最小高度: {min_z}")
+      logger.info(f"开始相机，方向: {direction}, 最小高度: {min_z}")
       camera_mqtt.publish("vision/height/result", {"min_height": min_z})
-    elif data == "stop":
-      logger.info("停止相机")
   except Exception as e:
-    logger.exception(f"处理相机指令时发生异常: {e}")
+    logger.exception(f"数据非json格式: {e}")
 
 if __name__ == "__main__":
   logger.info("相机服务启动中...")

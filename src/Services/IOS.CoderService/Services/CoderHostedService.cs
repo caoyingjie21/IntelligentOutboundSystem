@@ -14,14 +14,14 @@ namespace IOS.CoderService.Services;
 public class CoderHostedService : BackgroundService
 {
     private readonly ILogger<CoderHostedService> _logger;
-    private readonly IMqttService _mqttService;
+    private readonly IEnhancedMqttService _mqttService;
     private readonly ICoderService _coderService;
     private readonly CoderServiceOptions _options;
     private CodeInfo _currentCodeInfo = new();
 
     public CoderHostedService(
         ILogger<CoderHostedService> logger,
-        IMqttService mqttService,
+        IEnhancedMqttService mqttService,
         ICoderService coderService,
         IOptions<CoderServiceOptions> options)
     {
@@ -37,13 +37,11 @@ public class CoderHostedService : BackgroundService
         {
             _logger.LogInformation("条码服务托管服务启动中...");
 
-            // 启动MQTT服务
-            await _mqttService.StartAsync();
-            _logger.LogInformation("MQTT服务启动成功");
+            // MQTT服务已通过托管服务自动启动
+            _logger.LogInformation("等待MQTT服务连接...");
 
             // 订阅MQTT事件
             _mqttService.OnConnectionChanged += OnMqttConnectionChanged;
-            _mqttService.OnMessageReceived += OnMqttMessageReceived;
 
             // 启动条码服务（Socket服务器）
             _logger.LogInformation("启动Socket服务器...");
@@ -64,6 +62,9 @@ public class CoderHostedService : BackgroundService
             var status = await _coderService.GetStatusAsync();
             _logger.LogInformation("条码服务状态 - 运行中: {IsRunning}, 监听地址: {Address}:{Port}, 连接客户端: {Clients}", 
                 status.IsRunning, status.ListenAddress, status.ListenPort, status.ConnectedClients);
+
+            // 订阅MQTT主题
+            await SubscribeToTopicsAsync();
 
             _logger.LogInformation("条码服务托管服务启动成功");
             await base.StartAsync(cancellationToken);
@@ -87,11 +88,8 @@ public class CoderHostedService : BackgroundService
 
             // 取消订阅MQTT事件
             _mqttService.OnConnectionChanged -= OnMqttConnectionChanged;
-            _mqttService.OnMessageReceived -= OnMqttMessageReceived;
 
-            // 停止MQTT服务
-            await _mqttService.StopAsync();
-            _logger.LogInformation("MQTT服务停止成功");
+            // MQTT服务将通过托管服务自动停止
 
             _logger.LogInformation("条码服务托管服务停止成功");
             await base.StopAsync(cancellationToken);
@@ -136,57 +134,53 @@ public class CoderHostedService : BackgroundService
 
         if (isConnected)
         {
-            await SubscribeToTopics();
+            await SubscribeToTopicsAsync();
         }
     }
 
-    private async Task OnMqttMessageReceived(string topic, string message)
+    private async Task SubscribeToTopicsAsync()
     {
         try
         {
-            _logger.LogDebug("收到MQTT消息 - 主题: {Topic}, 消息: {Message}", topic, message);
+            _logger.LogInformation("订阅MQTT主题...");
 
-            switch (topic)
-            {
-                case var t when t == _options.Topics.Receives.Start:
-                    await HandleStartScanningMessageAsync(message);
-                    break;
-                case var t when t == _options.Topics.Receives.Order:
-                    await HandleOrderMessageAsync(message);
-                    break;
-                case var t when t == _options.Topics.Receives.Config:
-                    await HandleConfigMessageAsync(message);
-                    break;
-                case var t when t == _options.Topics.Receives.Stop:
-                    await HandleStopMessageAsync(message);
-                    break;
-                default:
-                    _logger.LogWarning("未处理的MQTT主题: {Topic}", topic);
-                    break;
-            }
+            // 订阅启动扫码消息
+            await _mqttService.SubscribeAsync<CoderStartCommand>(
+                _options.Topics.Receives.Start,
+                HandleStartScanningMessageAsync);
+
+            // 订阅订单消息
+            await _mqttService.SubscribeAsync<OrderInfo>(
+                _options.Topics.Receives.Order,
+                HandleOrderMessageAsync);
+
+            // 订阅配置消息
+            await _mqttService.SubscribeAsync<CoderConfig>(
+                _options.Topics.Receives.Config,
+                HandleConfigMessageAsync);
+
+            // 订阅停止消息
+            await _mqttService.SubscribeAsync<object>(
+                _options.Topics.Receives.Stop,
+                HandleStopMessageAsync);
+
+            _logger.LogInformation("MQTT主题订阅完成");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "处理MQTT消息失败 - 主题: {Topic}, 消息: {Message}", topic, message);
+            _logger.LogError(ex, "订阅MQTT主题失败");
         }
     }
 
-    private async Task HandleStartScanningMessageAsync(string message)
+    private async Task HandleStartScanningMessageAsync(StandardMessage<CoderStartCommand> message)
     {
         try
         {
-            _logger.LogInformation("收到启动扫码消息: {Message}", message);
+            _logger.LogInformation("收到启动扫码消息: {@Message}", message);
 
-            // 解析消息格式: {direction};{stackHeight}
-            var parts = message.Split(';');
-            if (parts.Length >= 2)
-            {
-                _currentCodeInfo.Direction = parts[0];
-                if (double.TryParse(parts[1], out var height))
-                {
-                    _currentCodeInfo.StackHeight = height;
-                }
-            }
+            var command = message.Data;
+            _currentCodeInfo.Direction = command.Direction;
+            _currentCodeInfo.StackHeight = command.StackHeight;
 
             // 清空之前的消息队列
             await _coderService.ClearMessageQueueAsync();
@@ -199,49 +193,79 @@ public class CoderHostedService : BackgroundService
             _logger.LogInformation("开始收集条码数据，等待5秒...");
             await Task.Delay(5000);
 
-            // 收集所有客户端的条码数据
-            var codes = await _coderService.CollectCodesAsync();
-            _currentCodeInfo.Codes = string.Join(";", codes);
-            _currentCodeInfo.Timestamp = DateTime.Now;
+            // 获取收集到的条码数据
+            var messages = await _coderService.GetMessagesAsync();
+            _logger.LogInformation("收集到 {Count} 条条码数据", messages.Count);
 
-            _logger.LogInformation("收集到条码数据: {Codes}", _currentCodeInfo.Codes);
+            // 处理条码数据
+            var codeInfos = new List<CodeInfo>();
+            foreach (var msg in messages)
+            {
+                var codeInfo = new CodeInfo
+                {
+                    Direction = _currentCodeInfo.Direction,
+                    StackHeight = _currentCodeInfo.StackHeight,
+                    Code = msg,
+                    Timestamp = DateTime.Now
+                };
+                codeInfos.Add(codeInfo);
+                _logger.LogInformation("处理条码: {Code}", msg);
+            }
 
-            // 请求订单信息
-            await _mqttService.PublishAsync(_options.Topics.Sends.Order, "请求订单信息");
-            _logger.LogInformation("已发送订单请求");
+            // 发布条码完成消息
+            var completeData = new CoderCompleteData
+            {
+                Direction = _currentCodeInfo.Direction,
+                StackHeight = _currentCodeInfo.StackHeight,
+                Codes = codeInfos.Select(c => c.Code).ToList(),
+                Timestamp = DateTime.Now,
+                Success = true
+            };
+
+            await _mqttService.PublishAsync(_options.Topics.Sends.Complete, completeData, MessagePriority.High);
+            _logger.LogInformation("已发布条码完成消息");
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "处理启动扫码消息失败");
+            
+            // 发布错误消息
+            var errorData = new CoderCompleteData
+            {
+                Direction = _currentCodeInfo.Direction,
+                StackHeight = _currentCodeInfo.StackHeight,
+                Codes = new List<string>(),
+                Timestamp = DateTime.Now,
+                Success = false,
+                ErrorMessage = ex.Message
+            };
+
+            await _mqttService.PublishAsync(_options.Topics.Sends.Complete, errorData, MessagePriority.High);
         }
     }
 
-    private async Task HandleOrderMessageAsync(string message)
+    private async Task HandleOrderMessageAsync(StandardMessage<OrderInfo> message)
     {
         try
         {
-            _logger.LogInformation("收到订单消息: {Message}", message);
+            _logger.LogInformation("收到订单消息: {@Message}", message);
 
-            _currentCodeInfo.Order = message;
+            var orderInfo = message.Data;
+            _logger.LogInformation("处理订单: {OrderId}", orderInfo.OrderId);
 
-            // 发布完整的条码信息到业务系统
-            var coderMessage = new StandardMessage<CodeInfo>
+            // 这里可以添加订单处理逻辑
+            // 例如：保存订单信息、更新状态等
+
+            // 发布订单请求消息（如果需要获取更多订单信息）
+            var orderRequest = new OrderRequest
             {
-                MessageId = Guid.NewGuid().ToString(),
-                Timestamp = DateTime.UtcNow,
-                Source = "CoderService",
-                Type = MessageType.Response,
-                Data = _currentCodeInfo
+                OrderId = orderInfo.OrderId,
+                RequestType = "GetDetails",
+                Timestamp = DateTime.Now
             };
 
-            var jsonMessage = JsonSerializer.Serialize(coderMessage);
-            await _mqttService.PublishAsync(_options.Topics.Sends.Coder, jsonMessage);
-
-            _logger.LogInformation("已发布条码信息到业务系统: {Order}, 条码: {Codes}", 
-                _currentCodeInfo.Order, _currentCodeInfo.Codes);
-
-            // 重置当前条码信息
-            _currentCodeInfo = new CodeInfo();
+            await _mqttService.PublishAsync(_options.Topics.Sends.OrderRequest, orderRequest);
+            _logger.LogInformation("已发布订单请求消息");
         }
         catch (Exception ex)
         {
@@ -249,80 +273,39 @@ public class CoderHostedService : BackgroundService
         }
     }
 
-    private async Task HandleConfigMessageAsync(string message)
+    private async Task HandleConfigMessageAsync(StandardMessage<CoderConfig> message)
     {
         try
         {
-            _logger.LogInformation("收到配置查询消息: {Message}", message);
+            _logger.LogInformation("收到配置消息: {@Message}", message);
 
-            var configResponse = new StandardMessage<object>
-            {
-                MessageId = Guid.NewGuid().ToString(),
-                Timestamp = DateTime.UtcNow,
-                Source = "CoderService",
-                Type = MessageType.Response,
-                Data = new
-                {
-                    ServiceName = "CoderService",
-                    Version = "1.0.0",
-                    Configuration = new
-                    {
-                        _options.SocketAddress,
-                        _options.SocketPort,
-                        _options.MaxClients,
-                        _options.ReceiveBufferSize,
-                        _options.ClientTimeout
-                    },
-                    Status = await _coderService.GetStatusAsync(),
-                    ConnectedClients = (await _coderService.GetConnectedClientsAsync()).Count
-                }
-            };
+            var config = message.Data;
+            _logger.LogInformation("更新配置: {@Config}", config);
 
-            var jsonResponse = JsonSerializer.Serialize(configResponse);
-            await _mqttService.PublishAsync(_options.Topics.Sends.Status, jsonResponse);
+            // 这里可以添加配置更新逻辑
+            // 例如：更新扫码参数、超时设置等
 
-            _logger.LogInformation("已发送配置信息响应");
+            _logger.LogInformation("配置更新完成");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "处理配置查询消息失败");
+            _logger.LogError(ex, "处理配置消息失败");
         }
     }
 
-    private async Task HandleStopMessageAsync(string message)
+    private async Task HandleStopMessageAsync(StandardMessage<object> message)
     {
         try
         {
-            _logger.LogInformation("收到停止消息: {Message}", message);
+            _logger.LogInformation("收到停止消息: {@Message}", message);
 
-            // 清空消息队列
+            // 停止当前扫码操作
             await _coderService.ClearMessageQueueAsync();
-
-            // 重置当前条码信息
-            _currentCodeInfo = new CodeInfo();
-
-            _logger.LogInformation("已处理停止消息");
+            _logger.LogInformation("已停止扫码操作");
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "处理停止消息失败");
-        }
-    }
-
-    private async Task SubscribeToTopics()
-    {
-        try
-        {
-            await _mqttService.SubscribeAsync(_options.Topics.Receives.Start);
-            await _mqttService.SubscribeAsync(_options.Topics.Receives.Order);
-            await _mqttService.SubscribeAsync(_options.Topics.Receives.Config);
-            await _mqttService.SubscribeAsync(_options.Topics.Receives.Stop);
-
-            _logger.LogInformation("已订阅所有MQTT主题");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "订阅MQTT主题失败");
         }
     }
 
@@ -331,39 +314,63 @@ public class CoderHostedService : BackgroundService
         try
         {
             var status = await _coderService.GetStatusAsync();
-            var clients = await _coderService.GetConnectedClientsAsync();
-
-            var statusMessage = new StandardMessage<object>
+            var statusData = new CoderStatusData
             {
-                MessageId = Guid.NewGuid().ToString(),
-                Timestamp = DateTime.UtcNow,
-                Source = "CoderService",
-                Type = MessageType.Heartbeat,
-                Data = new
-                {
-                    ServiceStatus = status,
-                    ConnectedClients = clients.Count,
-                    ClientDetails = clients.Select(c => new 
-                    {
-                        c.EndPoint,
-                        c.ConnectedAt,
-                        c.LastActivity,
-                        MessageCount = c.Messages.Count
-                    }).ToList(),
-                    SocketServerRunning = _coderService.IsRunning,
-                    ListeningPort = _options.SocketPort
-                }
+                IsRunning = status.IsRunning,
+                ListenAddress = status.ListenAddress,
+                ListenPort = status.ListenPort,
+                ConnectedClients = status.ConnectedClients,
+                Timestamp = DateTime.Now,
+                ServiceVersion = "v1.0.0"
             };
 
-            await _mqttService.PublishAsync(_options.Topics.Sends.Status, statusMessage);
-            
-            // 添加详细的状态日志
-            _logger.LogDebug("发布状态信息 - Socket运行: {SocketRunning}, 连接客户端: {ClientCount}, MQTT连接: {MqttConnected}", 
-                _coderService.IsRunning, clients.Count, status.MqttConnected);
+            await _mqttService.PublishAsync(_options.Topics.Sends.Status, statusData);
+            _logger.LogDebug("已发布状态消息");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "发布状态信息失败");
+            _logger.LogError(ex, "发布状态消息失败");
         }
     }
+}
+
+// 消息数据模型
+public class CoderStartCommand
+{
+    public string Direction { get; set; } = string.Empty;
+    public double StackHeight { get; set; }
+}
+
+public class CoderCompleteData
+{
+    public string Direction { get; set; } = string.Empty;
+    public double StackHeight { get; set; }
+    public List<string> Codes { get; set; } = new();
+    public DateTime Timestamp { get; set; }
+    public bool Success { get; set; }
+    public string? ErrorMessage { get; set; }
+}
+
+public class CoderStatusData
+{
+    public bool IsRunning { get; set; }
+    public string ListenAddress { get; set; } = string.Empty;
+    public int ListenPort { get; set; }
+    public int ConnectedClients { get; set; }
+    public DateTime Timestamp { get; set; }
+    public string ServiceVersion { get; set; } = string.Empty;
+}
+
+public class OrderRequest
+{
+    public string OrderId { get; set; } = string.Empty;
+    public string RequestType { get; set; } = string.Empty;
+    public DateTime Timestamp { get; set; }
+}
+
+public class CoderConfig
+{
+    public int ScanTimeout { get; set; } = 5000;
+    public int MaxRetries { get; set; } = 3;
+    public bool EnableValidation { get; set; } = true;
 }
